@@ -1,0 +1,210 @@
+{
+  "id": "github-otel-issues-v1",
+  "name": "01 · GitHub OTel Issues → Pattern Library",
+  "active": true,
+  "meta": { "templateCredsSetupCompleted": true },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": [{ "name": "discovery" }, { "name": "github" }],
+  "nodes": [
+    {
+      "id": "sch-1",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [120, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      }
+    },
+    {
+      "id": "req-collector",
+      "name": "GitHub – Collector Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 180],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/open-telemetry/opentelemetry-collector/issues",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "state",    "value": "open" },
+            { "name": "labels",   "value": "bug" },
+            { "name": "per_page", "value": "50" },
+            { "name": "sort",     "value": "updated" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept",     "value": "application/vnd.github+json" },
+            { "name": "User-Agent", "value": "aiops-pattern-discovery/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "req-java",
+      "name": "GitHub – Java Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/open-telemetry/opentelemetry-java-instrumentation/issues",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "state",    "value": "open" },
+            { "name": "labels",   "value": "bug" },
+            { "name": "per_page", "value": "50" },
+            { "name": "sort",     "value": "updated" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept",     "value": "application/vnd.github+json" },
+            { "name": "User-Agent", "value": "aiops-pattern-discovery/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "req-python",
+      "name": "GitHub – Python Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 420],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/open-telemetry/opentelemetry-python-contrib/issues",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "state",    "value": "open" },
+            { "name": "labels",   "value": "bug" },
+            { "name": "per_page", "value": "50" },
+            { "name": "sort",     "value": "updated" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept",     "value": "application/vnd.github+json" },
+            { "name": "User-Agent", "value": "aiops-pattern-discovery/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "merge-1",
+      "name": "Merge Repos",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [600, 300],
+      "parameters": { "mode": "append" }
+    },
+    {
+      "id": "code-1",
+      "name": "Filter & Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300],
+      "parameters": {
+        "jsCode": "// Each item.json is an array of issues from one repo (or a single issue object)\n// Flatten all repo arrays into individual issue items, filter noise, transform format\n\nconst REPO_SLUG = {\n  'opentelemetry-collector':              'otel-collector',\n  'opentelemetry-java-instrumentation':   'otel-java',\n  'opentelemetry-python-contrib':         'otel-python'\n};\n\nconst output = [];\n\nfor (const item of items) {\n  // httpRequest returns one item whose .json is the issues array\n  const data = item.json;\n  const issueList = Array.isArray(data) ? data : [data];\n\n  for (const issue of issueList) {\n    // Skip pull requests (they appear in issues endpoint)\n    if (issue.pull_request) continue;\n\n    // Engagement score: reactions + comments\n    const reactions = (issue.reactions && issue.reactions.total_count) || 0;\n    const comments  = issue.comments || 0;\n    const score     = reactions + comments;\n\n    // Quality gate: must have some engagement\n    if (score < 2) continue;\n\n    // Derive repo slug from repository_url\n    const repoName = (issue.repository_url || '').split('/').pop() || 'unknown-repo';\n    const slug     = REPO_SLUG[repoName] || repoName;\n\n    output.push({\n      json: {\n        source:    'github',\n        source_id: `${slug}-${issue.number}`,\n        url:       issue.html_url || '',\n        title:     issue.title   || '',\n        body:     (issue.body    || '').substring(0, 4000),\n        author:    (issue.user && issue.user.login) || 'unknown',\n        score:     score,\n        tags:     (issue.labels || []).map(l => l.name)\n      }\n    });\n  }\n}\n\nif (output.length === 0) {\n  return [{ json: { _skip: true, reason: 'no qualifying issues' } }];\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Skip Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1080, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json._skip }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "post-1",
+      "name": "POST → Pattern Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "parameters": {
+        "method":      "POST",
+        "url":         "={{ $env.PATTERN_LIBRARY_URL }}/issues/raw",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody":    true,
+        "contentType": "json",
+        "body":        "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout":           10000,
+          "ignoreResponseCode": true,
+          "response":          { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "noop-done",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1560, 300],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [[
+        { "node": "GitHub – Collector Issues", "type": "main", "index": 0 },
+        { "node": "GitHub – Java Issues",      "type": "main", "index": 0 },
+        { "node": "GitHub – Python Issues",    "type": "main", "index": 0 }
+      ]]
+    },
+    "GitHub – Collector Issues": {
+      "main": [[{ "node": "Merge Repos", "type": "main", "index": 0 }]]
+    },
+    "GitHub – Java Issues": {
+      "main": [[{ "node": "Merge Repos", "type": "main", "index": 1 }]]
+    },
+    "GitHub – Python Issues": {
+      "main": [[{ "node": "Merge Repos", "type": "main", "index": 2 }]]
+    },
+    "Merge Repos": {
+      "main": [[{ "node": "Filter & Transform", "type": "main", "index": 0 }]]
+    },
+    "Filter & Transform": {
+      "main": [[{ "node": "Skip Empty", "type": "main", "index": 0 }]]
+    },
+    "Skip Empty": {
+      "main": [
+        [{ "node": "POST → Pattern Library", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "POST → Pattern Library": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  }
+}

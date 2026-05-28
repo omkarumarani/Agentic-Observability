@@ -70,7 +70,11 @@ from obs_intelligence.evidence_builder import (
     evidence_lines as _evidence_lines,
 )
 from obs_intelligence.llm_enricher import enrich as _llm_enrich
+from obs_intelligence.confidence_model import build_uncertainty_profile as _build_uncertainty
+from obs_intelligence.multi_pattern_correlator import correlate_patterns as _correlate_patterns
+from obs_intelligence.timeseries_reasoner import build_timeseries_context as _build_ts_context
 from . import autonomy_rules as _autonomy_rules
+from . import pattern_client as _pattern_client
 from .autonomy_engine import check_autonomy_for_new_service
 
 logger = logging.getLogger("aiops-bridge.pipeline")
@@ -124,6 +128,9 @@ class PipelineSession:
     outcome: str = "pending"
     completed_at: float | None = None
     mttr_seconds: float = 0.0
+
+    # Pattern Library matches (populated by agent_analyze, Section F)
+    matched_patterns: list = field(default_factory=list)
 
     # Current pipeline stage (for debugging/inspection)
     stage: str = "created"
@@ -474,6 +481,8 @@ async def _notify_coordinator(session: PipelineSession) -> None:
                 "risk_level":      session.risk_level,
             },
         }
+        if _http is None:
+            return
         resp = await _http.post(
             f"{_OBS_INTELLIGENCE_URL}/intelligence/record-incident",
             json=payload,
@@ -786,6 +795,21 @@ def _analysis_from_recommendation(rec, risk) -> dict:
     }
 
 
+def _build_combined_context(
+    pattern_ctx: str,
+    ts_context,
+) -> str | None:
+    """Merge pattern context and time-series context into one LLM injection block."""
+    parts = []
+    if pattern_ctx:
+        parts.append(pattern_ctx)
+    if ts_context:
+        ts_block = ts_context.to_prompt_block()
+        if ts_block:
+            parts.append(ts_block)
+    return "\n\n".join(parts) if parts else None
+
+
 @pipeline_router.post("/agent/analyze")
 async def agent_analyze(req: AgentRequest) -> dict:
     """
@@ -807,6 +831,46 @@ async def agent_analyze(req: AgentRequest) -> dict:
         domain="compute",
         metrics=session.metrics,
         logs=session.logs,
+    )
+
+    # ── Step 1.5: Pattern Library matching (MCP search_patterns tool) ────────
+    pattern_matches: list[dict] = []
+    pattern_ctx: str = ""
+    ts_context = None
+    if _http:
+        # Run pattern matching and time-series context in parallel
+        pattern_task = asyncio.create_task(_pattern_client.search_patterns(
+            http=_http,
+            metrics=session.metrics,
+            alert_name=session.alert_name,
+            service_name=session.service_name,
+            severity=session.severity,
+        ))
+        ts_task = asyncio.create_task(_build_ts_context(
+            alert_name=session.alert_name,
+            service_name=session.service_name,
+            metrics_raw=session.metrics,
+            http=_http,
+        ))
+        pattern_matches, ts_context = await asyncio.gather(
+            pattern_task, ts_task, return_exceptions=False
+        )
+        pattern_ctx = _pattern_client.format_pattern_context(pattern_matches)
+        session.matched_patterns = pattern_matches
+        if pattern_matches:
+            logger.info(
+                "Pattern Library: %d matches for session=%s  top=%s (%.0f%%)",
+                len(pattern_matches),
+                req.session_id,
+                pattern_matches[0].get("pattern_name", "?"),
+                pattern_matches[0].get("combined_score", 0) * 100,
+            )
+
+    # ── Step 1.6: Multi-pattern correlation (Section P) ───────────────────────
+    correlation = _correlate_patterns(
+        pattern_matches,
+        alert_name=session.alert_name,
+        service_name=session.service_name,
     )
 
     # ── Step 2: scenario correlation ─────────────────────────────────────────
@@ -831,6 +895,18 @@ async def agent_analyze(req: AgentRequest) -> dict:
     )
     ev_lines = _evidence_lines(evidence)
 
+    # ── Step 5.5: Confidence & Uncertainty profile (Section O) ───────────────
+    top_pattern_score = (
+        pattern_matches[0].get("combined_score", 0.0) if pattern_matches else 0.0
+    )
+    uncertainty = _build_uncertainty(
+        features=features,
+        scenario_matches=matches,
+        risk=risk,
+        domain="compute",
+        pattern_library_top_score=top_pattern_score,
+    )
+
     # Persist risk + evidence in session for downstream agents (ticket, approval)
     session.risk_score = risk.risk_score
     session.risk_level = risk.risk_level
@@ -844,17 +920,28 @@ async def agent_analyze(req: AgentRequest) -> dict:
             f"(risk={risk.risk_level}, scenarios={len(matches)})...",
             _post,
         )
-        enrichment = await _llm_enrich(evidence, rec, risk, _http)
+        enrichment = await _llm_enrich(evidence, rec, risk, _http,
+                                        pattern_context=_build_combined_context(
+                                            pattern_ctx, ts_context
+                                        ))
         if enrichment:
             session.analysis = enrichment.to_analysis_dict()
             session.analysis["risk_score"] = round(risk.risk_score, 3)
             session.analysis["risk_level"] = risk.risk_level
             session.analysis["evidence_lines"] = ev_lines
+            session.analysis["matched_patterns"] = pattern_matches
+            session.analysis["uncertainty"] = uncertainty.to_dict()
+            session.analysis["pattern_correlation"] = correlation.to_dict()
+            session.analysis["timeseries_context"] = ts_context.to_dict() if ts_context else {}
             compute_agent_ai_analysis_total.labels(status="success").inc()
             provider = enrichment.provider
         else:
             session.analysis = _analysis_from_recommendation(rec, risk)
             session.analysis["evidence_lines"] = ev_lines
+            session.analysis["matched_patterns"] = pattern_matches
+            session.analysis["uncertainty"] = uncertainty.to_dict()
+            session.analysis["pattern_correlation"] = correlation.to_dict()
+            session.analysis["timeseries_context"] = ts_context.to_dict() if ts_context else {}
             compute_agent_ai_analysis_total.labels(status="deterministic").inc()
             provider = "scenario-catalog"
         session.stage = "analyzed"
@@ -863,11 +950,28 @@ async def agent_analyze(req: AgentRequest) -> dict:
     else:
         session.analysis = _analysis_from_recommendation(rec, risk)
         session.analysis["evidence_lines"] = ev_lines
+        session.analysis["matched_patterns"] = pattern_matches
+        session.analysis["uncertainty"] = uncertainty.to_dict()
+        session.analysis["pattern_correlation"] = correlation.to_dict()
+        session.analysis["timeseries_context"] = ts_context.to_dict() if ts_context else {}
         compute_agent_ai_analysis_total.labels(status="deterministic").inc()
         provider = "scenario-catalog"
         session.stage = "analyzed"
         session.stage_durations["analyzed"] = round(time.time() - session.created_at, 2)
         _persist_session(session)
+
+    # ── Step 6.5: fire-and-forget pattern assessment recording ────────────────
+    if _http and pattern_matches:
+        asyncio.create_task(
+            _pattern_client.post_assessment(
+                http=_http,
+                session_id=req.session_id,
+                alert_name=session.alert_name,
+                matched_patterns=pattern_matches,
+                risk_score=risk.risk_score,
+                recommended_action=rec.action_type,
+            )
+        )
 
     # ── Optional: merge pre-computed signals from obs-intelligence ──────────────
     _obs_url = os.getenv("OBS_INTELLIGENCE_URL", "http://obs-intelligence:9100")
@@ -915,6 +1019,9 @@ async def agent_analyze(req: AgentRequest) -> dict:
         "recommended_action": rec.action_type,
         "confidence": f"{rec.confidence:.2f}",
         "scenario_matches": len(matches),
+        "pattern_matches": len(pattern_matches),
+        "decision_tier": uncertainty.decision_tier,
+        "decision_confidence": round(uncertainty.decision_confidence, 3),
         "provider": provider,
         "message": (
             f"Intelligence pipeline: risk={risk.risk_level} ({risk.risk_score:.2f}), "
@@ -1389,11 +1496,14 @@ async def get_session(session_id: str) -> dict:
             "local_validation_completed": session.analysis.get("local_validation_completed", False),
             "knowledge_top_similarity": session.analysis.get("knowledge_top_similarity"),
             "local_model": session.analysis.get("local_model"),
+            "uncertainty": session.analysis.get("uncertainty"),
         },
         # Autonomy decision for UI
         "autonomy_decision": session.autonomy_decision,
         "trust_progress": trust_progress,
         "trust_metrics": trust_metrics,
+        # Pattern Library matches (Section F)
+        "matched_patterns": session.matched_patterns,
     }
 
 

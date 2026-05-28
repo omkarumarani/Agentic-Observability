@@ -1,0 +1,159 @@
+{
+  "id": "reddit-devops-otel-v1",
+  "name": "03 · Reddit DevOps/K8s OTel → Pattern Library",
+  "active": true,
+  "meta": { "templateCredsSetupCompleted": true },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": [{ "name": "discovery" }, { "name": "reddit" }],
+  "nodes": [
+    {
+      "id": "sch-1",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [120, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 4 }]
+        }
+      }
+    },
+    {
+      "id": "req-reddit-devops",
+      "name": "Reddit DevOps RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 240],
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.reddit.com/r/devops/search.rss?q=opentelemetry+OR+otel+OR+observability&sort=hot&t=week&restrict_sr=1&limit=25",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (compatible; AIOps-Pattern-Bot/1.0)" },
+            { "name": "Accept",     "value": "application/rss+xml,application/xml,text/xml" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "text" } },
+          "ignoreResponseCode": true
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "req-reddit-k8s",
+      "name": "Reddit K8s RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 380],
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.reddit.com/r/kubernetes/search.rss?q=opentelemetry+OR+otel+OR+observability&sort=hot&t=week&restrict_sr=1&limit=25",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "Mozilla/5.0 (compatible; AIOps-Pattern-Bot/1.0)" },
+            { "name": "Accept",     "value": "application/rss+xml,application/xml,text/xml" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "text" } },
+          "ignoreResponseCode": true
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "code-1",
+      "name": "Filter & Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300],
+      "parameters": {
+        "jsCode": "// Parse Reddit RSS XML from both subreddits\n// items[] contains one or two text responses (devops + kubernetes RSS)\n\nconst OBS_KEYWORDS = [\n  'opentelemetry', 'otel', 'prometheus', 'grafana', 'jaeger', 'zipkin',\n  'collector', 'metric', 'trace', 'span', 'alert', 'observability',\n  'kubernetes', 'k8s', 'scrape', 'exporter', 'instrumentation'\n];\nconst SKIP_PHRASES = ['hiring', 'salary', 'job posting', 'meme', '[meta]'];\n\nfunction parseRSS(xmlText) {\n  const entries = [];\n  const itemRe = /<entry>([\s\S]*?)<\\/entry>/g;\n  let m;\n  while ((m = itemRe.exec(xmlText)) !== null) {\n    const block = m[1];\n    const get = (tag) => {\n      const r = new RegExp('<' + tag + '[^>]*><!\\\\[CDATA\\\\[([\\\\s\\\\S]*?)\\\\]\\\\]><\\/' + tag + '>|<' + tag + '[^>]*>([^<]*)<\\/' + tag + '>');\n      const hit = r.exec(block);\n      return hit ? (hit[1] || hit[2] || '').trim() : '';\n    };\n    const getLinkHref = () => {\n      const r = /<link[^>]+href=\"([^\"]+)\"/.exec(block);\n      return r ? r[1] : '';\n    };\n    const getScore = () => {\n      // Reddit includes <score> in RSS\n      const r = /<score>([\\d]+)<\\/score>/.exec(block);\n      return r ? parseInt(r[1]) : 0;\n    };\n    entries.push({\n      title:  get('title'),\n      url:    getLinkHref(),\n      body:   get('content').substring(0, 2000),\n      author: get('name') || get('author') || 'unknown',\n      score:  getScore(),\n      id:     get('id').replace(/.*comments\\/([a-z0-9]+)\\/.*/, '$1') || get('id')\n    });\n  }\n  return entries;\n}\n\nconst output = [];\nconst seen = new Set();\n\nfor (const item of items) {\n  const xmlText = item.json.data || item.json || '';\n  if (typeof xmlText !== 'string') continue;\n  const entries = parseRSS(xmlText);\n  for (const post of entries) {\n    if (!post.title || seen.has(post.id)) continue;\n    seen.add(post.id);\n    const textLower = (post.title + ' ' + post.body).toLowerCase();\n    const isRelevant = OBS_KEYWORDS.some(kw => textLower.includes(kw));\n    if (!isRelevant) continue;\n    if (SKIP_PHRASES.some(p => textLower.includes(p))) continue;\n    // RSS score field is often 0; accept all relevant posts from RSS\n    output.push({\n      json: {\n        source:    'reddit',\n        source_id: 'reddit-' + post.id,\n        url:       post.url,\n        title:     post.title,\n        body:      post.body,\n        author:    post.author,\n        score:     post.score || 1,\n        tags:      ['devops', 'observability']\n      }\n    });\n  }\n}\n\nif (output.length === 0) {\n  return [{ json: { _skip: true, reason: 'no qualifying posts from RSS' } }];\n}\nreturn output;"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Skip Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [840, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json._skip }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "post-1",
+      "name": "POST → Pattern Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300],
+      "parameters": {
+        "method":      "POST",
+        "url":         "={{ $env.PATTERN_LIBRARY_URL }}/issues/raw",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody":    true,
+        "contentType": "json",
+        "body":        "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout":            10000,
+          "ignoreResponseCode": true,
+          "response":           { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "noop-done",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1320, 300],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [
+          { "node": "Reddit DevOps RSS", "type": "main", "index": 0 },
+          { "node": "Reddit K8s RSS",    "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Reddit DevOps RSS": {
+      "main": [[{ "node": "Filter & Transform", "type": "main", "index": 0 }]]
+    },
+    "Reddit K8s RSS": {
+      "main": [[{ "node": "Filter & Transform", "type": "main", "index": 0 }]]
+    },
+    "Filter & Transform": {
+      "main": [[{ "node": "Skip Empty", "type": "main", "index": 0 }]]
+    },
+    "Skip Empty": {
+      "main": [
+        [{ "node": "POST → Pattern Library", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "POST → Pattern Library": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "id": "hackernews-otel-v1",
+  "name": "04 · Hacker News OTel → Pattern Library",
+  "active": true,
+  "meta": { "templateCredsSetupCompleted": true },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": [{ "name": "discovery" }, { "name": "hackernews" }],
+  "nodes": [
+    {
+      "id": "sch-1",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [120, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 1 }]
+        }
+      }
+    },
+    {
+      "id": "req-hn-otel",
+      "name": "HN – OTel Stories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 220],
+      "parameters": {
+        "method": "GET",
+        "url": "https://hn.algolia.com/api/v1/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "query",          "value": "opentelemetry observability" },
+            { "name": "tags",           "value": "story" },
+            { "name": "hitsPerPage",    "value": "30" },
+            { "name": "numericFilters", "value": "points>10" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "aiops-pattern-discovery/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "req-hn-collector",
+      "name": "HN – Collector Pain Stories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 380],
+      "parameters": {
+        "method": "GET",
+        "url": "https://hn.algolia.com/api/v1/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "query",          "value": "otel collector metrics prometheus" },
+            { "name": "tags",           "value": "story" },
+            { "name": "hitsPerPage",    "value": "30" },
+            { "name": "numericFilters", "value": "points>5" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "aiops-pattern-discovery/1.0" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "merge-1",
+      "name": "Merge HN Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [600, 300],
+      "parameters": { "mode": "append" }
+    },
+    {
+      "id": "code-1",
+      "name": "Filter & Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300],
+      "parameters": {
+        "jsCode": "// Algolia HN API returns: { hits: [{objectID, title, story_text, points, author, url, created_at}] }\n// Merge produced two items (one per API call) — each item.json.hits is the array\n\nconst seenIds = new Set();\nconst output  = [];\n\nfor (const item of items) {\n  const hits = (item.json && item.json.hits) ? item.json.hits : [];\n\n  for (const hit of hits) {\n    // Dedup across the two queries\n    if (seenIds.has(hit.objectID)) continue;\n    seenIds.add(hit.objectID);\n\n    // Skip low-quality or non-technical\n    const text = ((hit.title || '') + ' ' + (hit.story_text || '')).toLowerCase();\n    const skipPhrases = ['hiring', 'who is hiring', 'ask hn: who wants', 'salary', 'job'];\n    if (skipPhrases.some(p => text.includes(p))) continue;\n\n    output.push({\n      json: {\n        source:    'hackernews',\n        source_id: `hn-${hit.objectID}`,\n        url:       hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,\n        title:     hit.title || '',\n        body:     (hit.story_text || '').replace(/<[^>]+>/g, '').substring(0, 4000),\n        author:    hit.author || 'unknown',\n        score:     hit.points  || 0,\n        tags:      ['hackernews', 'observability']\n      }\n    });\n  }\n}\n\nif (output.length === 0) {\n  return [{ json: { _skip: true, reason: 'no qualifying HN stories' } }];\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Skip Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1080, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json._skip }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "post-1",
+      "name": "POST → Pattern Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "parameters": {
+        "method":      "POST",
+        "url":         "={{ $env.PATTERN_LIBRARY_URL }}/issues/raw",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody":    true,
+        "contentType": "json",
+        "body":        "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout":            10000,
+          "ignoreResponseCode": true,
+          "response":           { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "noop-done",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1560, 300],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [[
+        { "node": "HN – OTel Stories",          "type": "main", "index": 0 },
+        { "node": "HN – Collector Pain Stories", "type": "main", "index": 0 }
+      ]]
+    },
+    "HN – OTel Stories": {
+      "main": [[{ "node": "Merge HN Results", "type": "main", "index": 0 }]]
+    },
+    "HN – Collector Pain Stories": {
+      "main": [[{ "node": "Merge HN Results", "type": "main", "index": 1 }]]
+    },
+    "Merge HN Results": {
+      "main": [[{ "node": "Filter & Transform", "type": "main", "index": 0 }]]
+    },
+    "Filter & Transform": {
+      "main": [[{ "node": "Skip Empty", "type": "main", "index": 0 }]]
+    },
+    "Skip Empty": {
+      "main": [
+        [{ "node": "POST → Pattern Library", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "POST → Pattern Library": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  }
+}

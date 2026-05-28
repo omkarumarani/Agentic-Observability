@@ -2,6 +2,77 @@
 
 ---
 
+## v15.0.0 — Pattern Intelligence Library (PostgreSQL + pgvector)
+
+**Release date:** April 19, 2026
+
+Implements the foundational **Pattern → Decision → Action** layer from `NewProject.md` — a structured failure pattern library backed by PostgreSQL 16 + pgvector that becomes the shared brain connecting the observability lab, the public discovery pipeline, and the compute agent reasoning engine.
+
+### New Services
+
+| Service | Port | Image | Purpose |
+|---|---|---|---|
+| `pattern-db` | 5432 | `pgvector/pgvector:pg16` | PostgreSQL 16 with pgvector extension; 7-table schema; HNSW cosine-similarity indexes on 384-dim embeddings |
+| `pattern-library` | 9300 | `./pattern-library` | FastAPI service — pattern CRUD, semantic search, hybrid incident matching, n8n ingestion endpoint |
+
+### New Files
+
+| File/Dir | Purpose |
+|---|---|
+| `pattern-library/Dockerfile` | Python 3.11-slim image; asyncpg + FastAPI + httpx |
+| `pattern-library/requirements.txt` | fastapi, uvicorn, asyncpg, httpx, pydantic |
+| `pattern-library/migrations/001_init.sql` | 7-table schema + HNSW indexes; auto-applied by PostgreSQL on first start |
+| `pattern-library/app/main.py` | FastAPI app — 20 endpoints across CRUD, search, matching, assessments, admin |
+| `pattern-library/app/db.py` | asyncpg connection pool (text-based vector handling — no numpy required) |
+| `pattern-library/app/embedder.py` | Ollama nomic-embed-text embeddings; graceful degradation when offline |
+| `pattern-library/app/models.py` | Pydantic v2 request/response models |
+| `pattern-library/app/seeder.py` | 5 foundational patterns with full signal/fix records; idempotent startup seed |
+
+### 7-Table Schema
+
+| Table | Records |
+|---|---|
+| `raw_public_issues` | Raw content from n8n public discovery (GitHub, SO, Reddit, HN, blogs) |
+| `enriched_issues` | LLM-processed pain points + 384-dim embeddings |
+| `patterns` | Core library — severity, recurrence score, confidence, OSS angle, source refs, embedding |
+| `pattern_signals` | Detection signals: metric thresholds (`threshold_operator`, `threshold_value`), log patterns, TraceQL, alert names |
+| `pattern_fixes` | Ordered fixes: autonomous → approval_required → manual; includes full YAML/Ansible content |
+| `lab_validations` | Lab reproduction results; increments `evidence_count` on positive detection |
+| `agent_assessments` | Session → matched patterns → outcome; incident embedding for future discovery |
+
+### Hybrid Matching (`POST /patterns/match-incident`)
+
+The core intelligence endpoint used by compute/storage agents:
+
+```
+combined_score = 0.6 × rule_score + 0.4 × vector_similarity
+```
+
+- **rule_score**: fraction of `pattern_signals` thresholds satisfied by caller-supplied `signals` dict
+- **vector_similarity**: cosine similarity between incident embedding and pattern embedding
+- Falls back to pure rule scoring when Ollama is offline (embeddings are NULL)
+
+### 5 Foundational Patterns
+
+| Pattern | Severity | Recurrence | Automation |
+|---|---|---|---|
+| `cpu_throttling_resource_limits` | high | 0.85 | risky |
+| `collector_pipeline_backpressure` | high | 0.78 | manual |
+| `prometheus_scrape_miss` | medium | 0.72 | safe |
+| `oom_kill_resource_misconfiguration` | critical | 0.80 | risky |
+| `misleading_p99_histogram_bucket_saturation` | low | 0.68 | safe |
+
+Each pattern has 3–5 detection signals and 2–3 fixes with full PromQL/config/Ansible content.
+
+### Modified Files
+
+| File | Change |
+|---|---|
+| `docker-compose.yml` | Added `pattern-db`, `pattern-library` services; `pattern-db-data` volume; `PATTERN_LIBRARY_URL` env var in compute-agent and streamlit-dashboard |
+| `README.md` | Phase 15 section; pattern-db and pattern-library in service map |
+
+---
+
 ## v8.0.0 — Local LLM Validation, Knowledge Store & AIOps Command Center UI
 
 **Release date:** March 21, 2026

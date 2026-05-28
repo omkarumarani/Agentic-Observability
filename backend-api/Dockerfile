@@ -11,6 +11,8 @@ FROM python:3.11-slim
 # Set a clean working directory inside the container
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # ── Install Python dependencies ───────────────────────────────
 # Copy requirements first to benefit from Docker layer caching.
 COPY requirements.txt .
@@ -26,4 +28,7 @@ EXPOSE 8081
 # --host 0.0.0.0  → listen on all interfaces (required inside Docker)
 # --port 8081     → must match EXPOSE and docker-compose ports mapping
 # --log-level info → clean, readable logs; change to "debug" for more detail
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8081/health || exit 1
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081", "--log-level", "info"]

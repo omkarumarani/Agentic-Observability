@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<!-- saved from url=(0053)file:///C:/Users/Admin/Downloads/dc-architecture.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise Agentic AI Platform — Dual DC Active/Passive</title>
+<link href="./Enterprise Agentic AI Platform — Dual DC Active_Passive_files/css2" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#020408;
+  --dc1:#0a1628;
+  --dc2:#0a2010;
+  --border:#1e3a5f;
+  --text:#c8d8e8;
+  --muted:#4a6080;
+  --dim:#8090a0;
+  --active:#00d4ff;
+  --passive:#00ff88;
+  --rh:#ee0000;
+  --warn:#f59e0b;
+  --purple:#8b5cf6;
+  --teal:#14b8a6;
+  --green:#10b981;
+  --yellow:#eab308;
+  --font:'Share Tech Mono',monospace;
+  --raj:'Rajdhani',sans-serif;
+}
+
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+
+/* SCANLINE EFFECT */
+body::before{
+  content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,212,255,0.015) 2px,rgba(0,212,255,0.015) 4px);
+  pointer-events:none;z-index:1000;
+}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,#020810 0%,#0a1628 100%);
+  border-bottom:1px solid var(--active);
+  padding:12px 24px;
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:10px;
+  box-shadow:0 0 40px rgba(0,212,255,0.15);
+  position:relative;z-index:100;
+}
+.h-logo{
+  font-family:var(--raj);font-size:1.4em;font-weight:700;
+  letter-spacing:0.05em;color:var(--active);
+  text-shadow:0 0 20px rgba(0,212,255,0.5);
+}
+.h-logo span{color:#fff}
+.h-sub{font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:0.15em}
+.h-status{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.status-pill{
+  display:flex;align-items:center;gap:6px;
+  font-size:9px;padding:4px 10px;border-radius:20px;
+  border:1px solid;letter-spacing:0.08em;font-family:var(--raj);font-weight:600;
+}
+.dot{width:7px;height:7px;border-radius:50%;animation:blink 1.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* CONTROL BAR */
+#controls{
+  background:#060c14;border-bottom:1px solid #0e2040;
+  padding:10px 24px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+}
+.ctrl-label{font-size:9px;color:var(--muted);letter-spacing:0.15em;margin-right:4px}
+.btn{
+  font-family:var(--font);font-size:9px;font-weight:400;
+  padding:6px 14px;border-radius:4px;border:1px solid;
+  cursor:pointer;letter-spacing:0.08em;transition:all 0.2s;
+  text-transform:uppercase;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:rgba(0,212,255,0.1);border-color:var(--active);color:var(--active)}
+.btn-primary:hover{background:rgba(0,212,255,0.2);box-shadow:0 0 12px rgba(0,212,255,0.3)}
+.btn-danger{background:rgba(238,0,0,0.1);border-color:var(--rh);color:var(--rh)}
+.btn-danger:hover{background:rgba(238,0,0,0.2);box-shadow:0 0 12px rgba(238,0,0,0.3)}
+.btn-warn{background:rgba(245,158,11,0.1);border-color:var(--warn);color:var(--warn)}
+.btn-warn:hover{background:rgba(245,158,11,0.2)}
+.btn-green{background:rgba(16,185,129,0.1);border-color:var(--green);color:var(--green)}
+.btn-green:hover{background:rgba(16,185,129,0.2)}
+.btn-purple{background:rgba(139,92,246,0.1);border-color:var(--purple);color:var(--purple)}
+.btn-purple:hover{background:rgba(139,92,246,0.2)}
+
+.sep{width:1px;height:20px;background:#1e3a5f}
+
+/* EVENT LOG */
+#event-log{
+  background:#030608;border-bottom:1px solid #0e2040;
+  padding:6px 24px;display:flex;gap:8px;align-items:center;
+  min-height:32px;overflow:hidden;
+}
+.log-label{font-size:8px;color:var(--muted);letter-spacing:0.15em;flex-shrink:0}
+.log-entries{display:flex;gap:16px;overflow:hidden;flex:1}
+.log-entry{
+  font-size:8px;white-space:nowrap;opacity:0;
+  animation:fadeLog 0.3s ease forwards;
+}
+@keyframes fadeLog{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+
+/* MAIN LAYOUT */
+#main{
+  display:grid;
+  grid-template-columns:1fr 140px 1fr;
+  gap:0;
+  padding:16px;
+  min-height:calc(100vh - 160px);
+  position:relative;
+}
+
+/* DATA CENTER PANELS */
+.dc-panel{
+  border-radius:12px;border:2px solid;
+  padding:14px;display:flex;flex-direction:column;gap:10px;
+  position:relative;overflow:hidden;
+}
+.dc-panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,currentColor,transparent);
+  opacity:0.6;
+}
+.dc-active{border-color:#00d4ff40;background:linear-gradient(135deg,#0a1628 0%,#060e1e 100%)}
+.dc-active::before{color:var(--active)}
+.dc-passive{border-color:#00ff8840;background:linear-gradient(135deg,#0a2010 0%,#061408 100%)}
+.dc-passive::before{color:var(--passive)}
+
+.dc-header{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.dc-title{font-family:var(--raj);font-size:1.1em;font-weight:700;letter-spacing:0.08em}
+.dc-badge{
+  font-size:8px;font-weight:600;padding:3px 10px;border-radius:12px;
+  border:1px solid;letter-spacing:0.1em;font-family:var(--raj);
+}
+
+/* ZONES */
+.zone{
+  border-radius:8px;border:1px solid rgba(255,255,255,0.06);
+  padding:10px;margin-bottom:6px;
+  position:relative;
+}
+.zone-title{
+  font-size:8px;font-weight:400;letter-spacing:0.15em;
+  margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.zone-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* SERVER RACKS */
+.rack-grid{display:flex;flex-wrap:wrap;gap:6px}
+
+/* SERVER COMPONENT */
+.server{
+  border:1px solid;border-radius:6px;
+  padding:7px 9px;cursor:pointer;
+  transition:all 0.2s;position:relative;
+  min-width:90px;flex:1;
+}
+.server:hover{transform:translateY(-2px);z-index:10}
+.server.offline{opacity:0.4;filter:grayscale(0.8)}
+.server.degraded{animation:degradedPulse 1.5s ease-in-out infinite}
+@keyframes degradedPulse{0%,100%{border-color:currentColor}50%{border-color:var(--warn)}}
+.server.replicating{animation:repPulse 2s ease-in-out infinite}
+@keyframes repPulse{0%,100%{box-shadow:0 0 0 rgba(0,255,136,0)}50%{box-shadow:0 0 12px rgba(0,255,136,0.3)}}
+
+.srv-icon{font-size:14px;margin-bottom:4px}
+.srv-name{font-size:9px;font-weight:400;letter-spacing:0.05em;line-height:1.3;margin-bottom:3px}
+.srv-detail{font-size:7.5px;color:var(--muted);line-height:1.4}
+.srv-status{
+  position:absolute;top:5px;right:5px;
+  width:6px;height:6px;border-radius:50%;
+}
+.status-ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-warn{background:var(--warn);box-shadow:0 0 6px var(--warn);animation:blink 1s infinite}
+.status-off{background:#333}
+.status-rep{background:var(--passive);box-shadow:0 0 6px var(--passive);animation:blink 2s infinite}
+
+/* NETWORK LINK ZONE */
+.dc-link{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:8px;padding:0 8px;
+}
+.link-label{
+  font-size:8px;color:var(--muted);letter-spacing:0.1em;
+  writing-mode:vertical-lr;text-align:center;
+}
+.link-wire{
+  flex:1;width:3px;border-radius:2px;
+  position:relative;overflow:hidden;
+  min-height:60px;
+}
+.link-wire-inner{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  background:linear-gradient(180deg,transparent 0%,currentColor 50%,transparent 100%);
+}
+.link-info{
+  font-size:7.5px;color:var(--dim);text-align:center;
+  line-height:1.5;padding:4px 6px;
+  border:1px solid rgba(255,255,255,0.08);border-radius:4px;
+  background:rgba(0,0,0,0.3);
+}
+
+/* CANVAS FOR PARTICLES */
+#flow-canvas{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:500;
+}
+
+/* TOOLTIP */
+#tooltip{
+  position:fixed;background:rgba(2,8,16,0.97);
+  color:var(--text);padding:12px 16px;border-radius:6px;
+  border:1px solid var(--active);font-size:9px;
+  pointer-events:none;opacity:0;transition:opacity 0.15s;
+  z-index:9999;max-width:280px;line-height:1.7;
+  box-shadow:0 0 30px rgba(0,212,255,0.2);
+}
+#tooltip .tt-title{
+  font-family:var(--raj);font-size:11px;font-weight:700;
+  margin-bottom:6px;padding-bottom:5px;
+  border-bottom:1px solid rgba(0,212,255,0.2);
+}
+#tooltip .tt-spec{color:var(--muted);font-size:8px;margin-top:5px}
+
+/* SECURITY OVERLAY */
+.security-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:7px;padding:2px 7px;border-radius:3px;
+  background:rgba(238,0,0,0.1);border:1px solid rgba(238,0,0,0.3);
+  color:#ff6060;letter-spacing:0.08em;font-family:var(--raj);font-weight:600;
+  margin-left:4px;
+}
+
+/* SIMULATION PANEL */
+#sim-panel{
+  position:fixed;bottom:20px;right:20px;
+  background:rgba(2,8,16,0.95);border:1px solid var(--active);
+  border-radius:8px;padding:14px;width:260px;
+  z-index:200;font-size:9px;
+  box-shadow:0 0 40px rgba(0,212,255,0.15);
+}
+#sim-panel h4{
+  font-family:var(--raj);font-size:11px;font-weight:700;
+  color:var(--active);margin-bottom:10px;
+  padding-bottom:6px;border-bottom:1px solid rgba(0,212,255,0.2);
+  letter-spacing:0.1em;
+}
+.sim-metric{display:flex;justify-content:space-between;margin-bottom:5px}
+.sim-label{color:var(--muted)}
+.sim-val{font-weight:400;color:var(--text)}
+
+/* LEGEND */
+#legend{
+  padding:10px 24px;
+  background:#030608;border-top:1px solid #0e2040;
+  display:flex;gap:20px;flex-wrap:wrap;align-items:center;
+}
+.leg{display:flex;align-items:center;gap:6px;font-size:8px;color:var(--dim)}
+.leg-line{width:24px;height:2px;border-radius:1px}
+
+/* ANIMATIONS */
+@keyframes particleFlow{
+  0%{opacity:0;transform:scale(0.5)}
+  20%{opacity:1;transform:scale(1)}
+  80%{opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(0.5)}
+}
+
+/* FAILOVER OVERLAY */
+#failover-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(238,0,0,0.05);pointer-events:none;
+  z-index:490;display:none;
+  animation:failoverFlash 0.5s ease infinite;
+}
+@keyframes failoverFlash{
+  0%,100%{background:rgba(238,0,0,0.02)}
+  50%{background:rgba(238,0,0,0.08)}
+}
+
+/* DC STATUS INDICATOR */
+.dc-heartbeat{
+  display:flex;align-items:center;gap:8px;
+  font-size:8px;color:var(--muted);margin-top:4px;
+}
+.hb-bar{
+  display:flex;gap:2px;align-items:flex-end;
+}
+.hb-tick{
+  width:3px;border-radius:1px;
+  animation:heartbeat 1.2s ease-in-out infinite;
+}
+@keyframes heartbeat{
+  0%,100%{height:4px;opacity:0.4}
+  50%{height:12px;opacity:1}
+}
+
+/* REPLICATION STATUS */
+.rep-status{
+  display:flex;align-items:center;gap:6px;
+  font-size:8px;padding:5px 10px;
+  background:rgba(0,255,136,0.05);
+  border:1px solid rgba(0,255,136,0.2);
+  border-radius:4px;margin-top:6px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="flow-canvas" width="1920" height="911"></canvas>
+<div id="failover-overlay" style="display: none;"></div>
+<div id="tooltip" style="opacity: 1; left: 1412px; top: 312px;"><div class="tt-title" style="color:var(--rh)">🛡 Standby WAF</div>F5 BIG-IP WAF standby<br>Identical policy to DC1<br>Policy sync every 5 minutes<div class="tt-spec">Same spec as DC1 · Hot standby</div></div>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="h-logo">ENTERPRISE<span> AGENTIC AI</span> PLATFORM</div>
+    <div class="h-sub">DUAL DATA CENTER · ACTIVE/PASSIVE · BANKING GRADE · ISO 27001 · SOC 2 TYPE II</div>
+  </div>
+  <div class="h-status">
+    <div class="status-pill" style="color:#00d4ff;border-color:#00d4ff40">
+      <div class="dot" style="background:#00d4ff"></div>DC1 ACTIVE
+    </div>
+    <div class="status-pill" id="dc2-status" style="color:#00ff88;border-color:#00ff8840"><div class="dot" style="background:#00ff88"></div>DC2 ACTIVE</div>
+    <div class="status-pill" style="color:#10b981;border-color:#10b98140">
+      <div class="dot" style="background:#10b981"></div>REPLICATION HEALTHY
+    </div>
+    <div class="status-pill" id="rto-pill" style="color:#8b5cf6;border-color:#8b5cf640">
+      <div class="dot" style="background:#8b5cf6"></div>RTO: &lt;15MIN · RPO: &lt;5MIN
+    </div>
+  </div>
+</header>
+
+<!-- CONTROLS -->
+<div id="controls">
+  <span class="ctrl-label">SIMULATE:</span>
+  <button class="btn btn-primary" onclick="simNormalFlow()">▶ Normal Data Flow</button>
+  <button class="btn btn-danger" onclick="simDC1Failure()">💥 DC1 Failure</button>
+  <button class="btn btn-green" onclick="simFailover()">🔄 Failover to DC2</button>
+  <button class="btn btn-warn" onclick="simSPLQuery()">🔍 Agent SPL Query</button>
+  <button class="btn btn-purple" onclick="simLLMCall()">🧠 LLM Inference</button>
+  <button class="btn btn-primary" onclick="simRemediation()">⚡ Full Remediation Loop</button>
+  <div class="sep"></div>
+  <button class="btn btn-warn" onclick="simCyberAttack()">🛡 Cyber Attack</button>
+  <button class="btn btn-green" onclick="resetAll()">↺ Reset</button>
+</div>
+
+<!-- EVENT LOG -->
+<div id="event-log">
+  <div class="log-label">SYS LOG ►</div>
+  <div class="log-entries" id="log-entries"><div class="log-entry" style="color: rgb(0, 212, 255);">[1:38:36 AM] Normal telemetry flow simulation started</div><div class="log-entry" style="color: rgb(0, 255, 136);">[1:38:31 AM] ✅ FAILOVER COMPLETE — All services running on DC2</div><div class="log-entry" style="color: rgb(0, 255, 136);">[1:38:30 AM] DC2 DR Platform Svcs ONLINE</div><div class="log-entry" style="color: rgb(0, 255, 136);">[1:38:29 AM] DC2 DR Observability ONLINE</div><div class="log-entry" style="color: rgb(0, 255, 136);">[1:38:29 AM] DC2 DR KubeVirt ONLINE</div><div class="log-entry" style="color: rgb(0, 255, 136);">[1:38:28 AM] DC2 DR Agent Workers ONLINE</div></div>
+</div>
+
+<!-- MAIN DIAGRAM -->
+<div id="main">
+
+  <!-- DC1 — ACTIVE -->
+  <div class="dc-panel dc-active" id="dc1-panel">
+    <div class="dc-header">
+      <div>
+        <div class="dc-title" style="color:var(--active)">
+          🏢 DATA CENTER 1 — MUMBAI
+          <span class="security-badge">🔒 TIER 4</span>
+        </div>
+        <div class="dc-heartbeat">
+          <div class="hb-bar" id="dc1-hb">
+            <div class="hb-tick" style="background:var(--active);animation-delay:0s;height:8px"></div>
+            <div class="hb-tick" style="background:var(--active);animation-delay:0.2s;height:4px"></div>
+            <div class="hb-tick" style="background:var(--active);animation-delay:0.4s;height:12px"></div>
+            <div class="hb-tick" style="background:var(--active);animation-delay:0.6s;height:6px"></div>
+            <div class="hb-tick" style="background:var(--active);animation-delay:0.8s;height:10px"></div>
+            <div class="hb-tick" style="background:var(--active);animation-delay:1.0s;height:4px"></div>
+          </div>
+          <span>HEARTBEAT OK · LATENCY 0.4ms</span>
+        </div>
+      </div>
+      <div class="dc-badge" style="color:var(--active);border-color:var(--active)40;background:rgba(0,212,255,0.08)">
+        ● ACTIVE PRIMARY
+      </div>
+    </div>
+
+    <!-- PERIMETER SECURITY -->
+    <div class="zone" style="border-color:#ee000030;background:rgba(238,0,0,0.04)">
+      <div class="zone-title" style="color:var(--rh)">
+        <div class="zone-dot" style="background:var(--rh)"></div>
+        PERIMETER SECURITY ZONE
+      </div>
+      <div class="rack-grid">
+        <div class="server" id="dc1-fw" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🔥 Next-Gen Firewall Cluster&lt;/div&gt;Palo Alto PA-7000 Series HA Pair&lt;br&gt;SSL/TLS Inspection · IPS/IDS · Anti-DDoS&lt;br&gt;Banking-grade deep packet inspection&lt;br&gt;Zero-trust network access enforcement&lt;div class=&#39;tt-spec&#39;&gt;Throughput: 200Gbps · Sessions: 64M&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🔥</div>
+          <div class="srv-name">NGFW Cluster</div>
+          <div class="srv-detail">Palo Alto PA-7000<br>HA Pair · IPS/IDS</div>
+        </div>
+        <div class="server" id="dc1-waf" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🛡 Web Application Firewall&lt;/div&gt;F5 BIG-IP Advanced WAF&lt;br&gt;OWASP Top 10 protection&lt;br&gt;Bot mitigation · API security&lt;br&gt;Blocks SQL injection, XSS, CSRF&lt;div class=&#39;tt-spec&#39;&gt;Throughput: 40Gbps&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🛡</div>
+          <div class="srv-name">WAF / DDoS</div>
+          <div class="srv-detail">F5 BIG-IP WAF<br>OWASP Top 10</div>
+        </div>
+        <div class="server" id="dc1-lb" style="color:var(--active);border-color:#00d4ff40;background:rgba(0,212,255,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--active)&#39;&gt;⚖ Load Balancer&lt;/div&gt;F5 BIG-IP LTM HA Pair&lt;br&gt;SSL offloading · Health checks&lt;br&gt;Distributes to OCP Ingress Routers&lt;br&gt;Active/Standby configuration&lt;div class=&#39;tt-spec&#39;&gt;40Gbps throughput&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">⚖</div>
+          <div class="srv-name">Load Balancer</div>
+          <div class="srv-detail">F5 BIG-IP LTM<br>SSL Offload · HA</div>
+        </div>
+        <div class="server" id="dc1-bastion" style="color:var(--warn);border-color:#f59e0b40;background:rgba(245,158,11,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--warn)&#39;&gt;🔐 Bastion / Jump Server&lt;/div&gt;RHEL 9 Hardened Jump Host&lt;br&gt;PAM (Privileged Access Mgmt)&lt;br&gt;All admin access via MFA + PAM&lt;br&gt;Session recording for audit&lt;div class=&#39;tt-spec&#39;&gt;CyberArk PAM · MFA enforced&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🔐</div>
+          <div class="srv-name">Bastion/PAM</div>
+          <div class="srv-detail">CyberArk PAM<br>MFA · Audit</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCP CLUSTER -->
+    <div class="zone" style="border-color:#00d4ff25;background:rgba(0,212,255,0.03)">
+      <div class="zone-title" style="color:var(--active)">
+        <div class="zone-dot" style="background:var(--active)"></div>
+        RED HAT OPENSHIFT 4.20 CLUSTER — PRIMARY
+      </div>
+      <div class="rack-grid">
+        <div class="server" id="dc1-masters" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🔴 OCP Control Plane&lt;/div&gt;3× Master Nodes — RHCOS&lt;br&gt;etcd cluster (quorum: 2/3)&lt;br&gt;kube-apiserver :6443&lt;br&gt;OCP API Server · Scheduler&lt;div class=&#39;tt-spec&#39;&gt;8 vCPU · 32GB RAM · 200GB NVMe each&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🔴</div>
+          <div class="srv-name">Control Plane</div>
+          <div class="srv-detail">3× Masters<br>etcd · API :6443</div>
+        </div>
+        <div class="server" id="dc1-gpu" style="color:var(--purple);border-color:#8b5cf640;background:rgba(139,92,246,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--purple)&#39;&gt;🧠 GPU AI Worker Nodes&lt;/div&gt;2× GPU Nodes with NVIDIA L40S&lt;br&gt;Node 1: Granite 3.1 8B (vLLM :8000)&lt;br&gt;Node 2: Llama 3.1 8B (vLLM :8001)&lt;br&gt;Both models always warm — instant failover&lt;div class=&#39;tt-spec&#39;&gt;32 vCPU · 128GB RAM · L40S 48GB VRAM&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🧠</div>
+          <div class="srv-name">GPU AI Nodes</div>
+          <div class="srv-detail">2× L40S 48GB<br>Granite + Llama</div>
+        </div>
+        <div class="server" id="dc1-agents" style="color:#3b82f6;border-color:#3b82f640;background:rgba(59,130,246,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:#3b82f6&#39;&gt;🤖 Agent Worker Nodes&lt;/div&gt;4× Standard Worker Nodes&lt;br&gt;Runs: 6 Specialized Agent pods&lt;br&gt;Supervisor Agent · LLM Gateway&lt;br&gt;Playbook Generator · HiTL Gate&lt;div class=&#39;tt-spec&#39;&gt;16 vCPU · 64GB RAM · 200GB NVMe&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🤖</div>
+          <div class="srv-name">Agent Workers</div>
+          <div class="srv-detail">4× Nodes<br>6 Agent Pods</div>
+        </div>
+        <div class="server" id="dc1-kubevirt" style="color:var(--active);border-color:#00d4ff40;background:rgba(0,212,255,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--active)&#39;&gt;🖥 KubeVirt/CNV Nodes&lt;/div&gt;4× KubeVirt Worker Nodes&lt;br&gt;Runs: Production Guest VMs&lt;br&gt;OVN-Kubernetes CNI · OVS&lt;br&gt;VM disconnect detection (primary use case)&lt;div class=&#39;tt-spec&#39;&gt;16 vCPU · 64GB RAM · 2TB vSAN&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🖥</div>
+          <div class="srv-name">KubeVirt/CNV</div>
+          <div class="srv-detail">4× Nodes<br>Guest VMs · OVS</div>
+        </div>
+        <div class="server" id="dc1-obs" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;📡 Observability Stack&lt;/div&gt;Prometheus · AlertManager&lt;br&gt;OTel Collector (PRIMARY AGGREGATOR)&lt;br&gt;Grafana · Tempo (traces)&lt;br&gt;Feeds Kafka → Splunk 62TB/day&lt;div class=&#39;tt-spec&#39;&gt;4× Nodes · 16 vCPU · 64GB RAM · 2TB NVMe&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">📡</div>
+          <div class="srv-name">Observability</div>
+          <div class="srv-detail">Prometheus · OTel<br>AlertManager</div>
+        </div>
+        <div class="server" id="dc1-platform" style="color:var(--teal);border-color:#14b8a640;background:rgba(20,184,166,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--teal)&#39;&gt;⚙ Platform Services&lt;/div&gt;Kafka AMQ Streams (transport)&lt;br&gt;ArgoCD · Keycloak (OIDC/RBAC)&lt;br&gt;Vault Agent Sidecars&lt;br&gt;Prompt Registry · Eval Pipeline&lt;div class=&#39;tt-spec&#39;&gt;4× Nodes · 16 vCPU · 64GB RAM&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">⚙</div>
+          <div class="srv-name">Platform Svcs</div>
+          <div class="srv-detail">Kafka · ArgoCD<br>Keycloak · Vault</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATA SERVICES -->
+    <div class="zone" style="border-color:#14b8a625;background:rgba(20,184,166,0.03)">
+      <div class="zone-title" style="color:var(--teal)">
+        <div class="zone-dot" style="background:var(--teal)"></div>
+        DATA SERVICES SERVERS (PHYSICAL)
+      </div>
+      <div class="rack-grid">
+        <div class="server" id="dc1-redis" style="color:#f59e0b;border-color:#f59e0b40;background:rgba(245,158,11,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:#f59e0b&#39;&gt;🗄 Redis Cache Server&lt;/div&gt;Dedicated Physical Server&lt;br&gt;Redis 7 Primary :6379&lt;br&gt;Redis Replica :6380 · Sentinel :26379&lt;br&gt;maxmemory: 8GB · allkeys-lru&lt;div class=&#39;tt-spec&#39;&gt;256GB RAM · 16 CPU · 1TB NVMe&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🗄</div>
+          <div class="srv-name">Redis Server</div>
+          <div class="srv-detail">Primary :6379<br>Sentinel :26379</div>
+        </div>
+        <div class="server" id="dc1-pg" style="color:var(--teal);border-color:#14b8a640;background:rgba(20,184,166,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--teal)&#39;&gt;🐘 PostgreSQL + pgvector&lt;/div&gt;Dedicated Physical Server&lt;br&gt;PostgreSQL 16 + pgvector HNSW index&lt;br&gt;128GB shared_buffers=32GB&lt;br&gt;Episodic Memory · RAG Knowledge · Baselines&lt;div class=&#39;tt-spec&#39;&gt;256GB RAM · 16 CPU · 1TB NVMe&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🐘</div>
+          <div class="srv-name">PostgreSQL+pgvec</div>
+          <div class="srv-detail">128GB · pgvector<br>PgBouncer :5433</div>
+        </div>
+        <div class="server" id="dc1-embed" style="color:var(--purple);border-color:#8b5cf640;background:rgba(139,92,246,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--purple)&#39;&gt;📐 Embedding Service&lt;/div&gt;FastAPI service on PostgreSQL server&lt;br&gt;Model: all-MiniLM-L6-v2 (384 dims)&lt;br&gt;Converts text → vectors for pgvector&lt;br&gt;4 uvicorn workers · Redis caches results&lt;div class=&#39;tt-spec&#39;&gt;16GB RAM · 4 CPU · Port :8001&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">📐</div>
+          <div class="srv-name">Embedding Svc</div>
+          <div class="srv-detail">MiniLM-L6-v2<br>FastAPI :8001</div>
+        </div>
+        <div class="server" id="dc1-splunk" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🔍 Splunk Enterprise Cluster&lt;/div&gt;PRIMARY AGENT DATA STORE — 62TB/day&lt;br&gt;Heavy Forwarder · Indexer Cluster (3 nodes)&lt;br&gt;Search Head · SPL REST API :8089&lt;br&gt;6 predefined SPL queries per agent domain&lt;div class=&#39;tt-spec&#39;&gt;3× Indexers: 256GB RAM · 16 CPU · 20TB SAS&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🔍</div>
+          <div class="srv-name">Splunk Cluster</div>
+          <div class="srv-detail">62TB/day · :8089<br>3× Indexer nodes</div>
+        </div>
+        <div class="server" id="dc1-ansible" style="color:var(--green);border-color:#10b98140;background:rgba(16,185,129,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--green)&#39;&gt;⚡ Ansible Tower (AAP)&lt;/div&gt;Red Hat Ansible Automation Platform&lt;br&gt;Executes AI-generated playbooks&lt;br&gt;Tower API :443 triggered by HiTL Gate&lt;br&gt;SSH :22 to OCP worker nodes&lt;div class=&#39;tt-spec&#39;&gt;32GB RAM · 8 CPU&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">⚡</div>
+          <div class="srv-name">Ansible AAP</div>
+          <div class="srv-detail">Tower API :443<br>Playbook Exec</div>
+        </div>
+        <div class="server" id="dc1-vault" style="color:var(--warn);border-color:#f59e0b40;background:rgba(245,158,11,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--warn)&#39;&gt;🏛 HashiCorp Vault&lt;/div&gt;Secrets management cluster (3 nodes)&lt;br&gt;All agent credentials injected at runtime&lt;br&gt;Auto-unseal · Dynamic secrets&lt;br&gt;Audit logging to Splunk&lt;div class=&#39;tt-spec&#39;&gt;HA Cluster · FIPS 140-2 compliant&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🏛</div>
+          <div class="srv-name">Vault Cluster</div>
+          <div class="srv-detail">Secrets · HA<br>FIPS 140-2</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPLICATION STATUS -->
+    <div class="rep-status" id="dc1-rep">
+      <div class="dot" style="background:var(--passive);animation-duration:2s"></div>
+      <span style="color:var(--passive)">ACTIVE REPLICATION TO DC2</span>
+      <span style="color:var(--muted);margin-left:auto" id="rep-lag">Lag: 1.9s</span>
+    </div>
+
+  </div><!-- /dc1 -->
+
+  <!-- CENTER LINK -->
+  <div class="dc-link">
+    <div class="link-label" style="color:var(--active)">DARK FIBRE</div>
+
+    <div class="link-wire" id="wire-top" style="background:rgba(0,212,255,0.1)">
+      <div class="link-wire-inner" style="color:var(--active);animation:flowDown 1s linear infinite"></div>
+    </div>
+
+    <div class="link-info" id="link-info">
+      <div style="color:var(--active);font-weight:bold;margin-bottom:4px">MPLS LINK 1</div>
+      <div style="color:var(--muted)">10Gbps Active</div>
+      <div style="color:var(--muted)">Encrypted</div>
+      <div style="color:var(--muted)">MACsec L2</div>
+      <div style="color:var(--muted)">Latency: 4ms</div>
+    </div>
+
+    <div class="link-info" style="margin-top:4px">
+      <div style="color:var(--passive);font-weight:bold;margin-bottom:4px">MPLS LINK 2</div>
+      <div style="color:var(--muted)">10Gbps Standby</div>
+      <div style="color:var(--muted)">Auto-failover</div>
+      <div style="color:var(--muted)">IPSec VPN</div>
+      <div style="color:var(--muted)">Latency: 4ms</div>
+    </div>
+
+    <div class="link-wire" id="wire-bot" style="background:rgba(0,255,136,0.1)">
+      <div class="link-wire-inner" style="color:var(--passive);animation:flowDown 1.5s linear infinite reverse"></div>
+    </div>
+
+    <div class="link-label" style="color:var(--passive)">DARK FIBRE</div>
+
+    <!-- What replicates -->
+    <div style="margin-top:8px;padding:6px;background:rgba(0,0,0,0.4);border:1px solid #1e3a5f;border-radius:4px;font-size:7px;color:var(--muted);text-align:center;line-height:1.6">
+      <div style="color:var(--passive);margin-bottom:2px;font-size:8px">REPLICATES</div>
+      PostgreSQL WAL<br>
+      pgvector data<br>
+      Splunk indexes<br>
+      Redis state<br>
+      Vault secrets<br>
+      OCP etcd<br>
+      Git repos
+    </div>
+  </div>
+
+  <!-- DC2 — PASSIVE -->
+  <div class="dc-panel dc-passive" id="dc2-panel">
+    <div class="dc-header">
+      <div>
+        <div class="dc-title" style="color:var(--passive)">
+          🏢 DATA CENTER 2 — PUNE DR
+          <span class="security-badge">🔒 TIER 3</span>
+        </div>
+        <div class="dc-heartbeat">
+          <div class="hb-bar" id="dc2-hb">
+            <div class="hb-tick" style="background:var(--passive);animation-delay:0.1s;height:6px"></div>
+            <div class="hb-tick" style="background:var(--passive);animation-delay:0.3s;height:10px"></div>
+            <div class="hb-tick" style="background:var(--passive);animation-delay:0.5s;height:4px"></div>
+            <div class="hb-tick" style="background:var(--passive);animation-delay:0.7s;height:8px"></div>
+            <div class="hb-tick" style="background:var(--passive);animation-delay:0.9s;height:6px"></div>
+            <div class="hb-tick" style="background:var(--passive);animation-delay:1.1s;height:10px"></div>
+          </div>
+          <span>HEARTBEAT OK · STANDBY READY</span>
+        </div>
+      </div>
+      <div class="dc-badge" id="dc2-badge" style="color: rgb(0, 255, 136); border-color: rgba(0, 255, 136, 0.25); background: rgba(0, 255, 136, 0.1);">● ACTIVE PRIMARY</div>
+    </div>
+
+    <!-- PERIMETER SECURITY -->
+    <div class="zone" style="border-color:#ee000030;background:rgba(238,0,0,0.04)">
+      <div class="zone-title" style="color:var(--rh)">
+        <div class="zone-dot" style="background:var(--rh)"></div>
+        PERIMETER SECURITY ZONE
+      </div>
+      <div class="rack-grid">
+        <div class="server" id="dc2-fw" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🔥 Standby Firewall Cluster&lt;/div&gt;Identical config to DC1&lt;br&gt;Synchronized firewall rules&lt;br&gt;Activates within 30 seconds on failover&lt;br&gt;Hot standby — config pre-loaded&lt;div class=&#39;tt-spec&#39;&gt;Palo Alto PA-7000 · Same spec as DC1&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">🔥</div>
+          <div class="srv-name">NGFW Standby</div>
+          <div class="srv-detail">Palo Alto PA-7000<br>Standby · Sync'd</div>
+        </div>
+        <div class="server" id="dc2-waf" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🛡 Standby WAF&lt;/div&gt;F5 BIG-IP WAF standby&lt;br&gt;Identical policy to DC1&lt;br&gt;Policy sync every 5 minutes&lt;div class=&#39;tt-spec&#39;&gt;Same spec as DC1 · Hot standby&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">🛡</div>
+          <div class="srv-name">WAF Standby</div>
+          <div class="srv-detail">F5 BIG-IP<br>Policy Sync'd</div>
+        </div>
+        <div class="server" id="dc2-lb" style="color:var(--passive);border-color:#00ff8840;background:rgba(0,255,136,0.05)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--passive)&#39;&gt;⚖ Standby Load Balancer&lt;/div&gt;F5 BIG-IP LTM — hot standby&lt;br&gt;DNS failover via GSLB&lt;br&gt;Activates when DC1 unreachable&lt;div class=&#39;tt-spec&#39;&gt;Same spec as DC1&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">⚖</div>
+          <div class="srv-name">LB Standby</div>
+          <div class="srv-detail">F5 BIG-IP GSLB<br>DNS Failover</div>
+        </div>
+        <div class="server" id="dc2-bastion" style="color:var(--warn);border-color:#f59e0b40;background:rgba(245,158,11,0.06)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--warn)&#39;&gt;🔐 DR Bastion&lt;/div&gt;Separate DR access path&lt;br&gt;Used during DC1 outage&lt;br&gt;Same PAM policies enforced&lt;div class=&#39;tt-spec&#39;&gt;CyberArk PAM · MFA enforced&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🔐</div>
+          <div class="srv-name">DR Bastion</div>
+          <div class="srv-detail">CyberArk PAM<br>DR Access Path</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCP DR CLUSTER -->
+    <div class="zone" style="border-color:#00ff8825;background:rgba(0,255,136,0.02)">
+      <div class="zone-title" style="color:var(--passive)">
+        <div class="zone-dot" style="background:var(--passive)"></div>
+        RED HAT OPENSHIFT 4.20 CLUSTER — DR STANDBY
+      </div>
+      <div class="rack-grid">
+        <div class="server" id="dc2-masters" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.04) opacity:0.7" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🔴 DR Control Plane&lt;/div&gt;3× Master Nodes — RHCOS&lt;br&gt;etcd replicated from DC1&lt;br&gt;Runs in read-mostly mode&lt;br&gt;Ready to take over in &lt;5 minutes&lt;div class=&#39;tt-spec&#39;&gt;Same spec as DC1 · etcd synced&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🔴</div>
+          <div class="srv-name">DR Control Plane</div>
+          <div class="srv-detail">3× Masters<br>etcd Replicated</div>
+        </div>
+        <div class="server" id="dc2-gpu" style="color:var(--purple);border-color:#8b5cf640;background:rgba(139,92,246,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--purple)&#39;&gt;🧠 DR GPU Nodes&lt;/div&gt;Models pre-loaded and warm&lt;br&gt;Granite 3.1 8B + Llama 3.1 8B&lt;br&gt;Ready to serve inference immediately&lt;br&gt;No model download delay on failover&lt;div class=&#39;tt-spec&#39;&gt;2× L40S 48GB VRAM · Pre-warmed&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🧠</div>
+          <div class="srv-name">DR GPU Nodes</div>
+          <div class="srv-detail">2× L40S · Pre-warmed<br>Models Ready</div>
+        </div>
+        <div class="server" id="dc2-agents" style="color:#3b82f6;border-color:#3b82f640;background:rgba(59,130,246,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:#3b82f6&#39;&gt;🤖 DR Agent Workers&lt;/div&gt;Agent pods scaled to zero in standby&lt;br&gt;Scale-up triggered automatically on failover&lt;br&gt;ArgoCD syncs latest agent config&lt;div class=&#39;tt-spec&#39;&gt;4× Nodes · Ready to scale&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🤖</div>
+          <div class="srv-name">DR Agent Workers</div>
+          <div class="srv-detail">4× Nodes · Scaled 0<br>Auto scale-up</div>
+        </div>
+        <div class="server" id="dc2-kubevirt" style="color:var(--passive);border-color:#00ff8840;background:rgba(0,255,136,0.03)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--passive)&#39;&gt;🖥 DR KubeVirt Nodes&lt;/div&gt;DR site for VM workloads&lt;br&gt;VMs migrated here during DC1 failover&lt;br&gt;Storage replicated via ODF MetroSync&lt;div class=&#39;tt-spec&#39;&gt;4× Nodes · ODF Metro&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">🖥</div>
+          <div class="srv-name">DR KubeVirt</div>
+          <div class="srv-detail">VM DR Target<br>ODF MetroSync</div>
+        </div>
+        <div class="server" id="dc2-obs" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.03)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;📡 DR Observability&lt;/div&gt;Prometheus in federation mode&lt;br&gt;OTel Collector standby&lt;br&gt;Receives data when active&lt;div class=&#39;tt-spec&#39;&gt;Ready to become primary source&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">📡</div>
+          <div class="srv-name">DR Observability</div>
+          <div class="srv-detail">Prometheus<br>OTel Standby</div>
+        </div>
+        <div class="server" id="dc2-platform" style="color:var(--teal);border-color:#14b8a640;background:rgba(20,184,166,0.03)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--teal)&#39;&gt;⚙ DR Platform Services&lt;/div&gt;ArgoCD standby (watches same GitHub)&lt;br&gt;Keycloak replica (read-only)&lt;br&gt;Kafka standby cluster&lt;div class=&#39;tt-spec&#39;&gt;Ready to take over platform services&lt;/div&gt;">
+          <div class="srv-status status-ok"></div>
+          <div class="srv-icon">⚙</div>
+          <div class="srv-name">DR Platform Svcs</div>
+          <div class="srv-detail">ArgoCD · Kafka<br>Keycloak Replica</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DR DATA SERVICES -->
+    <div class="zone" style="border-color:#14b8a620;background:rgba(20,184,166,0.02)">
+      <div class="zone-title" style="color:var(--teal)">
+        <div class="zone-dot" style="background:var(--teal)"></div>
+        DATA SERVICES SERVERS (PHYSICAL) — DR
+      </div>
+      <div class="rack-grid">
+        <div class="server" id="dc2-redis" style="color:#f59e0b;border-color:#f59e0b40;background:rgba(245,158,11,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:#f59e0b&#39;&gt;🗄 DR Redis Server&lt;/div&gt;Replica of DC1 Redis primary&lt;br&gt;Redis Replica of DC1 :6379&lt;br&gt;Promoted to primary on DC1 failure&lt;br&gt;Sentinel manages promotion&lt;div class=&#39;tt-spec&#39;&gt;Same spec as DC1 · Replication lag &lt;1s&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">🗄</div>
+          <div class="srv-name">Redis DR</div>
+          <div class="srv-detail">Replica of DC1<br>Auto-promote</div>
+        </div>
+        <div class="server" id="dc2-pg" style="color:var(--teal);border-color:#14b8a640;background:rgba(20,184,166,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--teal)&#39;&gt;🐘 DR PostgreSQL + pgvector&lt;/div&gt;PostgreSQL streaming replication from DC1&lt;br&gt;WAL shipped every 1 second&lt;br&gt;All pgvector embeddings replicated&lt;br&gt;Episodic Memory · Baselines · Audit log&lt;div class=&#39;tt-spec&#39;&gt;Same spec as DC1 · Lag &lt;5s · RPO &lt;5min&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">🐘</div>
+          <div class="srv-name">PG+pgvec DR</div>
+          <div class="srv-detail">WAL Streaming<br>Lag &lt;5s</div>
+        </div>
+        <div class="server" id="dc2-embed" style="color:var(--purple);border-color:#8b5cf640;background:rgba(139,92,246,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--purple)&#39;&gt;📐 DR Embedding Service&lt;/div&gt;Identical service running on DR PG server&lt;br&gt;Model pre-loaded and ready&lt;br&gt;Activates immediately on failover&lt;div class=&#39;tt-spec&#39;&gt;16GB RAM · 4 CPU · Port :8001&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">📐</div>
+          <div class="srv-name">Embedding DR</div>
+          <div class="srv-detail">Pre-loaded model<br>Instant activate</div>
+        </div>
+        <div class="server" id="dc2-splunk" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--rh)&#39;&gt;🔍 DR Splunk Cluster&lt;/div&gt;Splunk Indexer Cluster replication&lt;br&gt;Index replication factor: 2&lt;br&gt;All 62TB data replicated&lt;br&gt;Agents can query DR Splunk :8089&lt;div class=&#39;tt-spec&#39;&gt;3× Indexers · Same spec · Replicated indexes&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">🔍</div>
+          <div class="srv-name">Splunk DR</div>
+          <div class="srv-detail">Index Replication<br>RF:2 · :8089</div>
+        </div>
+        <div class="server" id="dc2-ansible" style="color:var(--green);border-color:#10b98140;background:rgba(16,185,129,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--green)&#39;&gt;⚡ DR Ansible AAP&lt;/div&gt;Ansible AAP standby instance&lt;br&gt;Same job templates as DC1&lt;br&gt;Activates on DC1 failure&lt;div class=&#39;tt-spec&#39;&gt;Standby · Same spec&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">⚡</div>
+          <div class="srv-name">Ansible DR</div>
+          <div class="srv-detail">Standby AAP<br>Same templates</div>
+        </div>
+        <div class="server" id="dc2-vault" style="color:var(--warn);border-color:#f59e0b40;background:rgba(245,158,11,0.04)" data-tip="&lt;div class=&#39;tt-title&#39; style=&#39;color:var(--warn)&#39;&gt;🏛 DR Vault Cluster&lt;/div&gt;Vault DR replication&lt;br&gt;All secrets replicated to DR&lt;br&gt;Read-only until DC1 failure&lt;br&gt;Promotes to primary automatically&lt;div class=&#39;tt-spec&#39;&gt;HA Cluster · DR Replication&lt;/div&gt;">
+          <div class="srv-status status-rep"></div>
+          <div class="srv-icon">🏛</div>
+          <div class="srv-name">Vault DR</div>
+          <div class="srv-detail">DR Replication<br>Auto-promote</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rep-status" id="dc2-rep">
+      <div class="dot" style="background:var(--passive);animation-duration:2s"></div>
+      <span style="color:var(--passive)">RECEIVING REPLICATION FROM DC1</span>
+      <span style="color:var(--muted);margin-left:auto">RPO: &lt;5min</span>
+    </div>
+
+  </div><!-- /dc2 -->
+
+</div><!-- /main -->
+
+<!-- LEGEND -->
+<div id="legend">
+  <span style="color:var(--muted);font-size:8px;letter-spacing:0.15em;margin-right:8px">DATA FLOWS:</span>
+  <div class="leg"><div class="leg-line" style="background:var(--rh);height:3px"></div>OCP Telemetry → Splunk</div>
+  <div class="leg"><div class="leg-line" style="background:var(--active)"></div>Agent SPL Query</div>
+  <div class="leg"><div class="leg-line" style="background:var(--purple)"></div>LLM Inference</div>
+  <div class="leg"><div class="leg-line" style="background:var(--green)"></div>Remediation</div>
+  <div class="leg"><div class="leg-line" style="background:var(--passive)"></div>DC Replication</div>
+  <div class="leg"><div class="leg-line" style="background:var(--warn);border-top:2px dashed var(--warn);background:none"></div>Failover Traffic</div>
+  <div style="margin-left:auto;font-size:8px;color:var(--muted)">RTO &lt;15min · RPO &lt;5min · FIPS 140-2 · ISO27001 · SOC2</div>
+</div>
+
+<!-- SIM PANEL -->
+<div id="sim-panel">
+  <h4>⚡ SYSTEM METRICS</h4>
+  <div class="sim-metric"><span class="sim-label">DC1 Status</span><span class="sim-val" id="m-dc1" style="color:var(--active)">ACTIVE</span></div>
+  <div class="sim-metric"><span class="sim-label">DC2 Status</span><span class="sim-val" id="m-dc2" style="color: rgb(0, 255, 136);">ACTIVE</span></div>
+  <div class="sim-metric"><span class="sim-label">Replication Lag</span><span class="sim-val" id="m-lag">1.4s</span></div>
+  <div class="sim-metric"><span class="sim-label">OCP Events/sec</span><span class="sim-val" id="m-events" style="color:var(--rh)">12</span></div>
+  <div class="sim-metric"><span class="sim-label">Active Agents</span><span class="sim-val" id="m-agents" style="color:var(--active)">5</span></div>
+  <div class="sim-metric"><span class="sim-label">LLM Tokens/min</span><span class="sim-val" id="m-tokens" style="color:var(--purple)">8,371</span></div>
+  <div class="sim-metric"><span class="sim-label">Remediations</span><span class="sim-val" id="m-rem" style="color:var(--green)">84</span></div>
+  <div class="sim-metric"><span class="sim-label">Link Latency</span><span class="sim-val" id="m-lat">4ms (DC2)</span></div>
+  <div class="sim-metric"><span class="sim-label">Simulation</span><span class="sim-val" id="m-sim" style="color: var(--muted);">IDLE</span></div>
+</div>
+
+<script>
+// ── CANVAS SETUP ──────────────────────────────
+const canvas = document.getElementById('flow-canvas');
+const ctx = canvas.getContext('2d');
+const particles = [];
+
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── TOOLTIP ───────────────────────────────────
+const tip = document.getElementById('tooltip');
+function showTip(e, html){
+  tip.innerHTML = html;
+  tip.style.opacity = '1';
+  moveTip(e);
+}
+function hideTip(){ tip.style.opacity = '0'; }
+function moveTip(e){
+  const x = Math.min(e.clientX+14, window.innerWidth-300);
+  const y = Math.min(e.clientY+14, window.innerHeight-200);
+  tip.style.left = x+'px';
+  tip.style.top = y+'px';
+}
+window.addEventListener('mousemove', e=>{
+  if(tip.style.opacity==='1') moveTip(e);
+});
+
+// Wire up all server tooltips
+document.querySelectorAll('[data-tip]').forEach(el=>{
+  el.addEventListener('mouseover', e => showTip(e, el.getAttribute('data-tip')));
+  el.addEventListener('mouseout', hideTip);
+});
+
+// ── PARTICLE SYSTEM ───────────────────────────
+function getCenter(id){
+  const el = document.getElementById(id);
+  if(!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left+r.width/2, y: r.top+r.height/2 };
+}
+
+function hexToRgba(hex, alpha){
+  const clean = hex.replace(/^#/,'').slice(0,6);
+  const r = parseInt(clean.slice(0,2),16);
+  const g = parseInt(clean.slice(2,4),16);
+  const b = parseInt(clean.slice(4,6),16);
+  return 'rgba('+r+','+g+','+b+','+alpha+')';
+}
+
+function safeHex(color){
+  // Always return clean 6-digit hex
+  return '#' + color.replace(/^#/,'').slice(0,6);
+}
+
+function addParticle(fromId, toId, color, count=3, size=4){
+  const f = getCenter(fromId);
+  const t = getCenter(toId);
+  if(!f||!t) return;
+  const sc = safeHex(color);
+  for(let i=0; i<count; i++){
+    particles.push({
+      fx:f.x, fy:f.y, tx:t.x, ty:t.y,
+      progress: i/count,
+      speed: 0.008 + Math.random()*0.004,
+      color: sc, size,
+      life: 1
+    });
+  }
+}
+
+function addMultiHop(ids, color, count=2, delay=0){
+  for(let i=0; i<ids.length-1; i++){
+    setTimeout(()=>{
+      addParticle(ids[i], ids[i+1], color, count);
+    }, delay + i*200);
+  }
+}
+
+// Draw loop
+function drawFrame(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  for(let i=particles.length-1; i>=0; i--){
+    const p = particles[i];
+    p.progress += p.speed;
+    if(p.progress > 1){ particles.splice(i,1); continue; }
+    
+    const t = p.progress;
+    const et = t<0.5 ? 2*t*t : -1+(4-2*t)*t;
+    
+    // Curve
+    const mx = (p.fx+p.tx)/2 + (p.fy-p.ty)*0.2;
+    const my = (p.fy+p.ty)/2 - (p.fx-p.tx)*0.2;
+    const x = (1-et)*(1-et)*p.fx + 2*(1-et)*et*mx + et*et*p.tx;
+    const y = (1-et)*(1-et)*p.fy + 2*(1-et)*et*my + et*et*p.ty;
+    
+    const alpha = Math.sin(t * Math.PI);
+    const g = ctx.createRadialGradient(x,y,0,x,y,p.size*2.5);
+    g.addColorStop(0, hexToRgba(p.color, 0.87));
+    g.addColorStop(1, hexToRgba(p.color, 0));
+    ctx.beginPath(); ctx.arc(x,y,p.size*2,0,Math.PI*2);
+    ctx.fillStyle = g; ctx.globalAlpha = alpha; ctx.fill();
+    ctx.beginPath(); ctx.arc(x,y,p.size*0.5,0,Math.PI*2);
+    ctx.fillStyle = '#fff'; ctx.globalAlpha = alpha*0.8; ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  requestAnimationFrame(drawFrame);
+}
+drawFrame();
+
+// ── LOG SYSTEM ────────────────────────────────
+function addLog(msg, color='#00d4ff'){
+  const container = document.getElementById('log-entries');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.style.color = color;
+  entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  container.prepend(entry);
+  while(container.children.length > 6){
+    container.removeChild(container.lastChild);
+  }
+}
+
+// ── METRICS UPDATE ────────────────────────────
+let remCount = 73;
+setInterval(()=>{
+  document.getElementById('m-events').textContent = Math.floor(Math.random()*16)+12;
+  document.getElementById('m-tokens').textContent = (Math.floor(Math.random()*5000)+4200).toLocaleString();
+  document.getElementById('m-lag').textContent = (Math.random()*2+0.5).toFixed(1)+'s';
+  document.getElementById('rep-lag').textContent = 'Lag: '+(Math.random()*2+0.5).toFixed(1)+'s';
+  if(Math.random()>0.7){ remCount++; document.getElementById('m-rem').textContent=remCount; }
+}, 2500);
+
+// ── SIMULATIONS ───────────────────────────────
+
+let simRunning = false;
+
+// NORMAL DATA FLOW
+function simNormalFlow(){
+  if(simRunning) return;
+  document.getElementById('m-sim').textContent = 'NORMAL FLOW';
+  document.getElementById('m-sim').style.color = '#00d4ff';
+  addLog('Normal telemetry flow simulation started', '#00d4ff');
+
+  // OCP → OTel → Splunk
+  const loop1 = setInterval(()=>{
+    addParticle('dc1-kubevirt','dc1-obs','#ee0000',2,3);
+    addParticle('dc1-masters','dc1-obs','#ee0000',1,3);
+  }, 800);
+
+  setTimeout(()=>{
+    const loop2 = setInterval(()=>{
+      addParticle('dc1-obs','dc1-splunk','#ee0000',3,5);
+    }, 600);
+    setTimeout(()=>clearInterval(loop2), 8000);
+  }, 400);
+
+  // Splunk → DC2 replication
+  setTimeout(()=>{
+    const loop3 = setInterval(()=>{
+      addParticle('dc1-splunk','dc2-splunk','#00ff88',2,3);
+      addParticle('dc1-pg','dc2-pg','#00ff88',1,2);
+      addParticle('dc1-redis','dc2-redis','#00ff88',1,2);
+    }, 1000);
+    setTimeout(()=>clearInterval(loop3), 8000);
+  }, 1000);
+
+  setTimeout(()=>{
+    clearInterval(loop1);
+    document.getElementById('m-sim').textContent = 'IDLE';
+    document.getElementById('m-sim').style.color = 'var(--muted)';
+  }, 10000);
+}
+
+// DC1 FAILURE
+function simDC1Failure(){
+  addLog('⚠ DC1 FAILURE DETECTED — Initiating failover protocol', '#ee0000');
+  document.getElementById('m-sim').textContent = 'DC1 FAILURE';
+  document.getElementById('m-sim').style.color = '#ee0000';
+  document.getElementById('failover-overlay').style.display = 'block';
+  document.getElementById('m-dc1').textContent = 'FAILED';
+  document.getElementById('m-dc1').style.color = '#ee0000';
+  document.getElementById('m-lat').textContent = 'N/A';
+
+  // Mark DC1 servers as offline
+  ['dc1-masters','dc1-gpu','dc1-agents','dc1-kubevirt',
+   'dc1-obs','dc1-platform','dc1-splunk','dc1-ansible'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){
+      el.classList.add('offline');
+      const dot = el.querySelector('.srv-status');
+      if(dot){ dot.className='srv-status status-off'; }
+    }
+  });
+
+  // Stop replication
+  document.getElementById('dc1-rep').style.opacity = '0.3';
+  addLog('Replication from DC1 stopped', '#ee0000');
+
+  setTimeout(()=>{
+    addLog('DNS failover initiated — GSLB switching to DC2', '#f59e0b');
+    addLog('Sentinel promoting DC2 Redis to primary', '#f59e0b');
+    addLog('PostgreSQL DR promoting to read-write', '#f59e0b');
+    addLog('Vault DR cluster promoting to primary', '#f59e0b');
+  }, 1500);
+}
+
+// FAILOVER TO DC2
+function simFailover(){
+  addLog('🔄 FAILOVER SEQUENCE EXECUTING — DC2 becoming ACTIVE', '#00ff88');
+  document.getElementById('m-sim').textContent = 'FAILOVER';
+  document.getElementById('m-sim').style.color = '#00ff88';
+
+  // Update DC2 badge
+  const dc2badge = document.getElementById('dc2-badge');
+  dc2badge.textContent = '● ACTIVE PRIMARY';
+  dc2badge.style.color = '#00ff88';
+  dc2badge.style.borderColor = '#00ff8840';
+  dc2badge.style.background = 'rgba(0,255,136,0.1)';
+
+  // Update status
+  document.getElementById('dc2-status').innerHTML =
+    '<div class="dot" style="background:#00ff88"></div>DC2 ACTIVE';
+  document.getElementById('m-dc2').textContent = 'ACTIVE';
+  document.getElementById('m-dc2').style.color = '#00ff88';
+
+  // Activate DC2 servers
+  ['dc2-masters','dc2-gpu','dc2-agents','dc2-kubevirt',
+   'dc2-obs','dc2-platform'].forEach((id,i)=>{
+    setTimeout(()=>{
+      const el = document.getElementById(id);
+      if(el){
+        el.classList.remove('offline');
+        const dot = el.querySelector('.srv-status');
+        if(dot){ dot.className='srv-status status-ok'; }
+        addLog(`DC2 ${el.querySelector('.srv-name').textContent} ONLINE`, '#00ff88');
+      }
+    }, i*400);
+  });
+
+  // Show DC2 traffic
+  setTimeout(()=>{
+    document.getElementById('failover-overlay').style.display = 'none';
+    addLog('✅ FAILOVER COMPLETE — All services running on DC2', '#00ff88');
+    document.getElementById('m-lat').textContent = '4ms (DC2)';
+
+    const fo1 = setInterval(()=>{
+      addParticle('dc2-obs','dc2-splunk','#ee0000',2,4);
+      addParticle('dc2-kubevirt','dc2-obs','#ee0000',1,3);
+    }, 800);
+
+    setTimeout(()=>{ clearInterval(fo1); }, 8000);
+  }, 3000);
+}
+
+// SPL QUERY SIMULATION
+function simSPLQuery(){
+  addLog('🔍 Network Agent executing network_disconnect.spl against Splunk', '#00d4ff');
+  document.getElementById('m-sim').textContent = 'SPL QUERY';
+  document.getElementById('m-sim').style.color = '#00d4ff';
+  document.getElementById('m-agents').textContent = '5';
+
+  // Agent → Redis (check cache)
+  addMultiHop(['dc1-agents','dc1-redis'], '#f59e0b', 2);
+  addLog('Cache miss — executing live SPL query', '#f59e0b');
+
+  // Agent → Splunk (SPL query)
+  setTimeout(()=>{
+    addParticle('dc1-agents','dc1-splunk','#f59e0b',3,4);
+    addLog('SPL query sent to Splunk REST :8089', '#00d4ff');
+  }, 500);
+
+  // Splunk → Agent (results)
+  setTimeout(()=>{
+    addParticle('dc1-splunk','dc1-agents','#ee0000',4,5);
+    addLog('SPL results returned: 3 VM disconnect events detected', '#ee0000');
+  }, 1800);
+
+  // Agent → pgvector (RAG)
+  setTimeout(()=>{
+    addParticle('dc1-agents','dc1-pg','#14b8a6',3,3);
+    addLog('Vector DB queried for relevant runbooks', '#14b8a6');
+  }, 2500);
+
+  // pgvector → Agent
+  setTimeout(()=>{
+    addParticle('dc1-pg','dc1-agents','#14b8a6',3,3);
+    addLog('RAG context retrieved: network_disconnect runbook 94% match', '#14b8a6');
+    document.getElementById('m-sim').textContent = 'SPL COMPLETE';
+  }, 3500);
+}
+
+// LLM INFERENCE SIMULATION
+function simLLMCall(){
+  addLog('🧠 Agent calling LLM Gateway — Granite 3.1 8B inference', '#8b5cf6');
+  document.getElementById('m-sim').textContent = 'LLM INFERENCE';
+  document.getElementById('m-sim').style.color = '#8b5cf6';
+
+  // Agent → GPU nodes (LLM call)
+  setTimeout(()=>{
+    addParticle('dc1-agents','dc1-gpu','#8b5cf6',4,4);
+    addLog('Inference request sent to Granite 3.1 8B vLLM :8000', '#8b5cf6');
+  }, 200);
+
+  // GPU → Splunk (for context check - not really but visual)
+  setTimeout(()=>{
+    addLog('LLM processing: SPL results + RAG context + runbook', '#8b5cf6');
+  }, 1500);
+
+  // GPU → Agent (response)
+  setTimeout(()=>{
+    addParticle('dc1-gpu','dc1-agents','#8b5cf6',5,5);
+    addLog('LLM response: Ansible YAML generated · Confidence: 94%', '#00ff88');
+    document.getElementById('m-tokens').textContent = '7,240';
+    document.getElementById('m-sim').textContent = 'LLM DONE';
+  }, 3000);
+}
+
+// FULL REMEDIATION LOOP
+async function simRemediation(){
+  if(simRunning){ return; }
+  simRunning = true;
+  document.getElementById('m-sim').textContent = 'REMEDIATION';
+  document.getElementById('m-sim').style.color = '#10b981';
+
+  addLog('🔴 ALERT: KubeVirt VM network disconnect detected — worker-node-3', '#ee0000');
+
+  // Phase 1: OCP → OTel → Splunk
+  await wait(500);
+  addParticle('dc1-kubevirt','dc1-obs','#ee0000',3,4);
+  addLog('OCP telemetry: VM kubevirt-prod-42 disconnect · OVS flow drops 847', '#ee0000');
+
+  await wait(800);
+  addParticle('dc1-obs','dc1-splunk','#ee0000',4,5);
+  addLog('OTel Collector → Splunk HEC :8088 · Alert indexed', '#ee0000');
+
+  // Phase 2: AI Analytics → Supervisor
+  await wait(1200);
+  addParticle('dc1-splunk','dc1-agents','#ee0000',3,4);
+  addLog('AI Analytics Engine: anomaly detected → Supervisor Agent notified', '#8b5cf6');
+
+  // Phase 3: Agent SPL Query
+  await wait(1000);
+  addParticle('dc1-agents','dc1-splunk','#f59e0b',3,3);
+  addLog('Network Agent executing network_disconnect.spl → Splunk :8089', '#f59e0b');
+
+  await wait(1200);
+  addParticle('dc1-splunk','dc1-agents','#ee0000',4,4);
+  addLog('SPL results: vm=kubevirt-prod-42 node=worker-node-3 drops=847', '#ee0000');
+
+  // Phase 4: RAG
+  await wait(800);
+  addParticle('dc1-agents','dc1-pg','#14b8a6',3,3);
+  await wait(600);
+  addParticle('dc1-pg','dc1-agents','#14b8a6',3,3);
+  addLog('Vector DB: runbook match 94% · past resolution found in episodic memory', '#14b8a6');
+
+  // Phase 5: LLM
+  await wait(800);
+  addParticle('dc1-agents','dc1-gpu','#8b5cf6',4,4);
+  addLog('LLM Gateway: Granite 3.1 8B generating Ansible playbook...', '#8b5cf6');
+  await wait(2000);
+  addParticle('dc1-gpu','dc1-agents','#8b5cf6',4,4);
+  addLog('✅ Ansible YAML generated · ArgoCD manifest ready · Confidence: 94%', '#00ff88');
+
+  // Phase 6: GitHub + ServiceNow
+  await wait(1000);
+  addLog('📄 Playbook Generator: pushing GitHub PR + creating ServiceNow CHG0089412', '#10b981');
+  addParticle('dc1-agents','dc1-vault','#f59e0b',2,2);
+  addLog('Vault: GitHub PAT + ServiceNow token injected', '#f59e0b');
+
+  // Phase 7: HiTL (simulated)
+  await wait(1500);
+  addLog('⏳ HiTL Gate: waiting for human approval — ServiceNow CHG0089412', '#eab308');
+  await wait(2000);
+  addLog('✅ HUMAN APPROVED: CHG0089412 approved by Onkar · Failsafe released', '#00ff88');
+
+  // Phase 8: ArgoCD + Ansible
+  await wait(500);
+  addParticle('dc1-agents','dc1-platform','#10b981',4,4);
+  addParticle('dc1-agents','dc1-ansible','#10b981',3,3);
+  addLog('ArgoCD syncing network-remediation-appset.yaml to OCP cluster', '#10b981');
+  addLog('Ansible AAP executing ovs-networkpolicy-fix.yml on worker-node-3', '#10b981');
+
+  await wait(1500);
+  addParticle('dc1-platform','dc1-kubevirt','#10b981',4,4);
+  addParticle('dc1-ansible','dc1-kubevirt','#10b981',3,3);
+
+  await wait(1500);
+  addParticle('dc1-kubevirt','dc1-obs','#ee0000',2,3);
+  addParticle('dc1-obs','dc1-splunk','#ee0000',2,3);
+  addLog('🟢 REMEDIATION COMPLETE: VM kubevirt-prod-42 network restored · Loop closed', '#00ff88');
+  addLog('Episodic Memory updated · ServiceNow INC closed · Resolution: 14 minutes', '#14b8a6');
+
+  remCount++;
+  document.getElementById('m-rem').textContent = remCount;
+  document.getElementById('m-sim').textContent = 'COMPLETE';
+
+  simRunning = false;
+}
+
+// CYBER ATTACK SIMULATION
+function simCyberAttack(){
+  addLog('🚨 SECURITY ALERT: Anomalous API calls detected — possible intrusion attempt', '#ee0000');
+  document.getElementById('m-sim').textContent = 'CYBER THREAT';
+  document.getElementById('m-sim').style.color = '#ee0000';
+
+  // Attack hits firewall
+  setTimeout(()=>{
+    addParticle('dc1-fw','dc1-waf','#ee0000',5,5);
+    addLog('NGFW: Blocking 847 malicious requests/sec from 185.x.x.x', '#ee0000');
+  }, 300);
+
+  // WAF blocks
+  setTimeout(()=>{
+    document.getElementById('dc1-fw').classList.add('degraded');
+    document.getElementById('dc1-waf').classList.add('degraded');
+    addLog('WAF: SQL injection attempt blocked · DDoS mitigation active', '#ee0000');
+  }, 800);
+
+  // Security agent
+  setTimeout(()=>{
+    addParticle('dc1-splunk','dc1-agents','#ee0000',4,4);
+    addLog('Security Agent: security_violation.spl triggered — audit log anomalies', '#8b5cf6');
+  }, 1500);
+
+  // Vault locks
+  setTimeout(()=>{
+    addParticle('dc1-vault','dc1-agents','#f59e0b',3,3);
+    addLog('Vault: Suspicious credential access — rotating Splunk + GitHub tokens', '#f59e0b');
+  }, 2000);
+
+  // Recovery
+  setTimeout(()=>{
+    document.getElementById('dc1-fw').classList.remove('degraded');
+    document.getElementById('dc1-waf').classList.remove('degraded');
+    addLog('🛡 THREAT NEUTRALISED: Attack blocked · Incident created INC0049500', '#00ff88');
+    addLog('ServiceNow CHG raised for credential rotation + firewall rule update', '#10b981');
+    document.getElementById('m-sim').textContent = 'THREAT BLOCKED';
+    document.getElementById('m-sim').style.color = '#00ff88';
+  }, 4000);
+}
+
+// RESET ALL
+function resetAll(){
+  particles.length = 0;
+  simRunning = false;
+  document.getElementById('failover-overlay').style.display = 'none';
+  document.getElementById('m-sim').textContent = 'IDLE';
+  document.getElementById('m-sim').style.color = 'var(--muted)';
+  document.getElementById('m-dc1').textContent = 'ACTIVE';
+  document.getElementById('m-dc1').style.color = 'var(--active)';
+  document.getElementById('m-dc2').textContent = 'PASSIVE';
+  document.getElementById('m-dc2').style.color = 'var(--passive)';
+  document.getElementById('dc2-badge').textContent = '◎ PASSIVE STANDBY';
+  document.getElementById('dc2-badge').style.color = 'var(--passive)';
+  document.getElementById('dc2-status').innerHTML =
+    '<div class="dot" style="background:#00ff88"></div>DC2 PASSIVE';
+  document.getElementById('m-lat').textContent = '4ms';
+
+  // Reset server states
+  document.querySelectorAll('.server').forEach(el=>{
+    el.classList.remove('offline','degraded');
+  });
+  document.querySelectorAll('.srv-status').forEach(dot=>{
+    if(!dot.classList.contains('status-rep')){
+      // Check parent
+    }
+  });
+
+  // Re-set DC1 server statuses to OK
+  ['dc1-fw','dc1-waf','dc1-lb','dc1-bastion',
+   'dc1-masters','dc1-gpu','dc1-agents','dc1-kubevirt',
+   'dc1-obs','dc1-platform','dc1-redis','dc1-pg',
+   'dc1-embed','dc1-splunk','dc1-ansible','dc1-vault'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){
+      const dot = el.querySelector('.srv-status');
+      if(dot) dot.className='srv-status status-ok';
+    }
+  });
+
+  document.getElementById('dc1-rep').style.opacity = '1';
+  addLog('System reset to initial state', '#00d4ff');
+}
+
+// ── CONTINUOUS REPLICATION PARTICLES ──────────
+function startBgReplication(){
+  setInterval(()=>{
+    addParticle('dc1-pg','dc2-pg','#00ff88',1,2);
+    addParticle('dc1-splunk','dc2-splunk','#00ff88',1,2);
+  }, 3000);
+  setInterval(()=>{
+    addParticle('dc1-redis','dc2-redis','#00ff88',1,2);
+    addParticle('dc1-vault','dc2-vault','#00ff88',1,2);
+  }, 4000);
+}
+setTimeout(startBgReplication, 1000);
+
+// ── HELPER ────────────────────────────────────
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// Init
+addLog('All systems initialised · DC1 Active · DC2 Passive · Replication healthy', '#00ff88');
+</script>
+
+
+</body></html>

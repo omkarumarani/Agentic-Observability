@@ -187,6 +187,7 @@ async def enrich(
     risk: RiskAssessment,
     http: httpx.AsyncClient,
     sre_assessment: SREAssessment | None = None,
+    pattern_context: str | None = None,
 ) -> LLMEnrichment | None:
     """
     Call the LLM to produce a rich incident narrative from the evidence bundle.
@@ -221,7 +222,8 @@ async def enrich(
             risk,
         )
 
-    prompt = _build_prompt(evidence, recommendation, risk, sre_assessment)
+    prompt = _build_prompt(evidence, recommendation, risk, sre_assessment,
+                            pattern_context=pattern_context)
 
     # ── Provider failover: OpenAI → Claude → deterministic fallback ───────────
     raw: dict | None = None
@@ -360,6 +362,7 @@ def _build_prompt(
     recommendation: Recommendation,
     risk: RiskAssessment,
     sre_assessment: SREAssessment | None = None,
+    pattern_context: str | None = None,
 ) -> str:
     """
     Build the LLM user prompt from the EvidenceReport, top Recommendation,
@@ -387,6 +390,11 @@ def _build_prompt(
     sre_block = (
         f"\n{sre_assessment.to_prompt_block()}\n"
         if sre_assessment is not None
+        else ""
+    )
+    pattern_block = (
+        f"\n{pattern_context}\n"
+        if pattern_context
         else ""
     )
 
@@ -418,6 +426,7 @@ Display name:  {recommendation.display_name}
 Playbook:      {playbook_name}
 Rollback hint: {rollback_hint}
 {sre_block}
+{pattern_block}
 Respond with ONLY valid JSON (no markdown fences) matching this schema:
 {{
   "rca_summary": "2-3 sentence root cause analysis written from the SRE Reasoning Layer facts above",

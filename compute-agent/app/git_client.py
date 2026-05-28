@@ -36,7 +36,7 @@ logger = logging.getLogger("aiops-bridge.git_client")
 # ── Config from environment ────────────────────────────────────────────────────
 GITEA_URL:    str  = os.getenv("GITEA_URL",        "http://gitea:3000")
 GITEA_USER:   str  = os.getenv("GITEA_ADMIN_USER", "aiops")
-GITEA_PASS:   str  = os.getenv("GITEA_ADMIN_PASS", "Aiops1234!")
+GITEA_PASS:   str  = os.getenv("GITEA_ADMIN_PASS", "")
 GITEA_ORG:    str  = os.getenv("GITEA_ORG",        "aiops-org")
 GITEA_REPO:   str  = os.getenv("GITEA_REPO",       "ansible-playbooks")
 GITEA_ENABLED: bool = os.getenv("GITEA_ENABLED", "true").lower() == "true"

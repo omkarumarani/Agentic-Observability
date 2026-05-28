@@ -10,11 +10,45 @@ so the tests are fully offline — no running services required.
 import os
 import pathlib
 import sys
+import types
+from unittest.mock import MagicMock
 
 # Make obs_intelligence importable during offline test runs (no pip install needed).
 _OBS_INTELLIGENCE_APP = pathlib.Path(__file__).parents[2] / "obs-intelligence" / "app"
 if str(_OBS_INTELLIGENCE_APP) not in sys.path:
     sys.path.insert(0, str(_OBS_INTELLIGENCE_APP))
+
+# ── Stub prometheus_client if not installed (e.g. local test runs) ────────────
+# The app.telemetry module imports prometheus_client at module level.  In the
+# Docker image the package is present, but for lightweight local test runs we
+# inject a minimal mock so the import succeeds without the real library.
+if "prometheus_client" not in sys.modules:
+    _pc = types.ModuleType("prometheus_client")
+
+    class _FakeCounter:
+        """Minimal Counter stub — .labels().inc() is a no-op."""
+        def __init__(self, *a, **kw):
+            pass
+        def labels(self, *a, **kw):
+            return self
+        def inc(self, *a, **kw):
+            pass
+
+    class _FakeHistogram:
+        """Minimal Histogram stub — .labels().observe() is a no-op."""
+        def __init__(self, *a, **kw):
+            pass
+        def labels(self, *a, **kw):
+            return self
+        def observe(self, *a, **kw):
+            pass
+
+    _pc.Counter = _FakeCounter
+    _pc.Histogram = _FakeHistogram
+    _pc.CONTENT_TYPE_LATEST = "text/plain"
+    _pc.generate_latest = lambda *a, **kw: b""
+    _pc.REGISTRY = MagicMock()
+    sys.modules["prometheus_client"] = _pc
 
 import pytest
 

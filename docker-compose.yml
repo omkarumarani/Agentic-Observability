@@ -751,6 +751,9 @@ services:
       # Must match the xyOps container hostname (docker-compose: hostname: xyops)
       XYOPS_SERVER_HOSTNAME: "xyops"
 
+      # ── Pattern Library — Phase 15 ────────────────────────
+      PATTERN_LIBRARY_URL: "http://pattern-library:9300"
+
       # ── OTel identity ──────────────────────────────────────
       OTEL_SERVICE_NAME: "compute-agent"
       OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=local,service.namespace=aiops"
@@ -1309,10 +1312,195 @@ services:
       GITEA_REPO:           "ansible-playbooks"
       XYOPS_URL:            "http://xyops:5522"
       POLL_INTERVAL_SECONDS: "5"
+      PATTERN_LIBRARY_URL:  "http://pattern-library:9300"
     ports:
       - "3500:8501"    # Streamlit UI  http://localhost:3500
     depends_on:
       - compute-agent
+    networks:
+      - obs-net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # Pattern Database  — Phase 15: PostgreSQL + pgvector
+  #
+  # Stores the Pattern Intelligence Library: a 7-table schema covering
+  # raw public issues, enriched issues, patterns, signals, fixes,
+  # lab validations, and agent assessments.
+  #
+  # pgvector extension enables semantic similarity search on 384-dim
+  # embeddings from nomic-embed-text (shared with the ChromaDB store).
+  #
+  # Data flow:
+  #   n8n discovery pipeline → POST /issues/raw  → pattern-library
+  #   compute / storage agent → POST /patterns/match-incident  → pattern-library
+  #
+  # Ports
+  # ─────
+  #   5432  PostgreSQL (exposed on host for psql / pgAdmin / DBeaver)
+  #         Connection: postgresql://patterns:patterns123@localhost:5432/patterns
+  # ──────────────────────────────────────────────────────────
+  pattern-db:
+    image: pgvector/pgvector:pg16
+    container_name: pattern-db
+    hostname: pattern-db
+    environment:
+      POSTGRES_DB:       patterns
+      POSTGRES_USER:     patterns
+      POSTGRES_PASSWORD: patterns123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pattern-db-data:/var/lib/postgresql/data
+      - ./pattern-library/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ./pattern-library/migrations/002_pattern_history.sql:/docker-entrypoint-initdb.d/002_pattern_history.sql:ro
+      - ./pattern-library/migrations/003_evaluation_snapshots.sql:/docker-entrypoint-initdb.d/003_evaluation_snapshots.sql:ro
+    networks:
+      - obs-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patterns -d patterns"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────────────────
+  # Pattern Library  — Phase 15: Pattern Intelligence Service
+  #
+  # FastAPI service that is the core of the Pattern Intelligence Layer.
+  # Provides structured failure pattern CRUD, semantic search via
+  # pgvector, and hybrid incident-to-pattern matching.
+  #
+  # Key capabilities:
+  #   - CRUD for 7-table pattern schema (patterns, signals, fixes, etc.)
+  #   - POST /patterns/search  — semantic search (text → embedding → cosine)
+  #   - POST /patterns/match-incident — hybrid: rule thresholds + vector sim
+  #   - POST /issues/raw  — n8n ingestion endpoint for public issue discovery
+  #   - POST /assessments  — record agent session → matched patterns
+  #   - POST /admin/embed-all — backfill embeddings after Ollama comes online
+  #
+  # Seeds 5 foundational patterns on first startup:
+  #   cpu_throttling_resource_limits
+  #   collector_pipeline_backpressure
+  #   prometheus_scrape_miss
+  #   oom_kill_resource_misconfiguration
+  #   misleading_p99_histogram_bucket_saturation
+  #
+  # Ports
+  # ─────
+  #   9300  Pattern Library API   http://localhost:9300/docs
+  #         Health:               curl http://localhost:9300/health
+  #         Stats:                curl http://localhost:9300/stats
+  #         List patterns:        curl http://localhost:9300/patterns
+  # ──────────────────────────────────────────────────────────
+  pattern-library:
+    build:
+      context: ./pattern-library
+      dockerfile: Dockerfile
+    container_name: pattern-library
+    hostname: pattern-library
+    environment:
+      DATABASE_URL:      "postgresql://patterns:patterns123@pattern-db:5432/patterns"
+      LOCAL_LLM_URL:     "http://local-llm:11434"
+      EMBED_MODEL:       "nomic-embed-text"
+      SEED_ON_STARTUP:   "true"
+    ports:
+      - "9300:9300"    # Pattern Library API  http://localhost:9300/docs
+    depends_on:
+      pattern-db:
+        condition: service_healthy
+    networks:
+      - obs-net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # n8n  — Public-Source Pattern Discovery Pipeline
+  #
+  # Runs the 5 discovery workflows that feed raw observability
+  # pain points from GitHub, Stack Overflow, Reddit, Hacker News,
+  # and CNCF/vendor RSS feeds into the Pattern Library.
+  #
+  # Workflows are imported automatically on first startup from
+  # ./n8n/workflows/  (read-only mount).
+  #
+  # Credentials needed for higher-rate GitHub access:
+  #   Settings → Credentials → GitHub API (optional, unauthenticated
+  #   rate limit is 60 req/hr which is sufficient for 6h schedules)
+  #
+  # Ports
+  # ─────
+  #   5678  n8n UI  http://localhost:5678
+  #         Login:  admin / Aiops1234!
+  # ──────────────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    hostname: n8n
+    environment:
+      # Owner account — skips the first-run "Set up owner" screen
+      N8N_USER_MANAGEMENT_DISABLED:  "false"
+      N8N_EMAIL_MODE:                "smtp"
+      N8N_USER_FOLDER:               "/home/node/.n8n"
+      N8N_BASIC_AUTH_ACTIVE:         "true"
+      N8N_BASIC_AUTH_USER:           "admin"
+      N8N_BASIC_AUTH_PASSWORD:       "Aiops1234!"
+      # Pre-create the owner so the setup wizard is skipped automatically
+      N8N_DEFAULT_USER_EMAIL:        "admin@aiops.local"
+      N8N_DEFAULT_USER_PASSWORD:     "Aiops1234!"
+      N8N_DEFAULT_USER_FIRST_NAME:   "Admin"
+      N8N_DEFAULT_USER_LAST_NAME:    "AIOps"
+      N8N_HOST:                      "0.0.0.0"
+      N8N_PORT:                      "5678"
+      N8N_PROTOCOL:                  "http"
+      WEBHOOK_URL:                   "http://localhost:5678/"
+      GENERIC_TIMEZONE:              "UTC"
+      N8N_RUNNERS_ENABLED:           "true"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
+      # Pattern Library endpoint available to all workflows
+      PATTERN_LIBRARY_URL:           "http://pattern-library:9300"
+      # Allow workflows to read env vars in expressions (e.g. $env.PATTERN_LIBRARY_URL)
+      N8N_BLOCK_ENV_ACCESS_IN_NODE:  "false"
+      # Optional: set a GitHub token to raise rate limit to 5000 req/hr
+      # GITHUB_TOKEN:                "ghp_your_token_here"
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+      - ./n8n/init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+    ports:
+      - "5678:5678"    # n8n UI  http://localhost:5678
+    depends_on:
+      - pattern-library
+    networks:
+      - obs-net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # Enrichment Worker  —  raw_public_issues → enriched_issues → patterns
+  #
+  # Polls GET /issues/raw?processed=false every 60 seconds.
+  # For each unprocessed raw issue it runs Section G LLM prompt chains
+  # (summarize → extract pain → create/merge pattern) via the local LLM
+  # and writes results back to pattern-library.
+  #
+  # Scales independently of n8n — increase BATCH_SIZE to process faster.
+  # Requires the local-llm service (Ollama) to be reachable.
+  # ──────────────────────────────────────────────────────────
+  enrichment-worker:
+    build:
+      context: ./enrichment-worker
+      dockerfile: Dockerfile
+    container_name: enrichment-worker
+    hostname: enrichment-worker
+    environment:
+      PATTERN_LIBRARY_URL: "http://pattern-library:9300"
+      LOCAL_LLM_URL:       "http://local-llm:11434"
+      LLM_MODEL:           "llama3.2:3b"
+      POLL_INTERVAL:       "60"
+      BATCH_SIZE:          "5"
+      MIN_ISSUE_SCORE:     "1"
+    depends_on:
+      - pattern-library
     networks:
       - obs-net
     restart: unless-stopped
@@ -1377,4 +1565,8 @@ volumes:
   ollama-data:
     driver: local
   chroma-data:
+    driver: local
+  pattern-db-data:
+    driver: local
+  n8n-data:
     driver: local

@@ -142,6 +142,8 @@ A full-stack, containerised **AIOps observability platform** that closes the loo
 | **gitea** | 3002 | Self-hosted Git — Ansible PR audit trail |
 | **ui-backend** | 9005 | BFF aggregator — unified API for Command Center (`/pipeline/*`, `/scenarios`, `/autonomy`) |
 | **streamlit-dashboard** | 3500 | Streamlit Command Center — 7-tab live dashboard (replaces React `aiops-ui` + `command-center`) |
+| **pattern-db** | 5432 | PostgreSQL 16 + pgvector — Pattern Intelligence Library (7-table schema, HNSW indexes) |
+| **pattern-library** | 9300 | Pattern Library API — CRUD, semantic search, hybrid incident-to-pattern matching |
 | **frontend-api** | 8080 | Demo app — emits OTel spans/metrics/logs |
 | **backend-api** | 8081 | Demo app — emits OTel spans/metrics/logs |
 | **loadgen** | — | Steady traffic generator (opt-in profile) |
@@ -492,6 +494,73 @@ Refactored the Streamlit Command Center into a multi-page app, added real-time S
 | `email-all` | `email_configs` to on-call distribution list; warning/info severity routing |
 
 Routes: critical alerts fan out to `slack-critical` + `pagerduty-critical` via `continue: true`; warning/info alerts also copied to `email-all`.
+
+---
+
+### Phase 15 — Pattern Intelligence Library (PostgreSQL + pgvector)
+
+> **Latest:** v15.0.0 — Pattern Library service with hybrid incident matching and n8n ingestion endpoint.
+
+Adds a structured failure pattern library as the foundational layer of the Pattern → Decision → Action intelligence system described in `NewProject.md`.
+
+**New services:**
+
+| Service | Port | Purpose |
+|---|---|---|
+| `pattern-db` | 5432 | PostgreSQL 16 + pgvector 0.7 — Pattern Intelligence Library (HNSW cosine-similarity indexes) |
+| `pattern-library` | 9300 | FastAPI Pattern Library — CRUD, semantic search, hybrid matching, n8n ingestion |
+
+**7-table schema** (`pattern-library/migrations/001_init.sql`):
+
+| Table | Purpose |
+|---|---|
+| `raw_public_issues` | Raw content from n8n (GitHub, SO, Reddit, HN, blogs) |
+| `enriched_issues` | LLM-processed issues with pain point + 384-dim embedding |
+| `patterns` | Core pattern library — name, description, severity, recurrence score, confidence, embedding |
+| `pattern_signals` | Detection signals per pattern (metric thresholds, log patterns, TraceQL, alert names) |
+| `pattern_fixes` | Ordered fixes per pattern (autonomous → approval-required → manual) |
+| `lab_validations` | Records of patterns reproduced and detected in the local lab |
+| `agent_assessments` | Links compute/storage sessions to matched patterns with outcomes |
+
+**Key endpoints** (`http://localhost:9300/docs`):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Service health + active pattern count |
+| `GET /stats` | Full library statistics |
+| `GET /patterns` | List patterns (filter by severity, environment, deprecated) |
+| `POST /patterns` | Create a new pattern (embedding auto-generated via Ollama) |
+| `GET /patterns/{id}` | Pattern detail with signals, fixes, and recent lab validations |
+| `POST /patterns/search` | Semantic search — text → embedding → cosine similarity |
+| `POST /patterns/match-incident` | **Hybrid matching** — 0.6 × rule_score + 0.4 × vector_similarity |
+| `POST /patterns/{id}/signals` | Add a detection signal to a pattern |
+| `POST /patterns/{id}/fixes` | Add a fix to a pattern |
+| `POST /patterns/{id}/validations` | Record a lab validation result |
+| `POST /issues/raw` | n8n ingestion — receive raw public issue |
+| `POST /assessments` | Record agent session → matched patterns |
+| `POST /assessments/{id}/outcome` | Record resolved / escalated / false_positive outcome |
+| `POST /admin/seed` | Re-trigger seeder (force=true to overwrite) |
+| `POST /admin/embed-all` | Backfill NULL embeddings after Ollama starts |
+
+**5 foundational patterns seeded on startup:**
+
+| Pattern | Severity | Automation | Recurrence |
+|---|---|---|---|
+| `cpu_throttling_resource_limits` | high | risky | 0.85 |
+| `collector_pipeline_backpressure` | high | manual | 0.78 |
+| `prometheus_scrape_miss` | medium | safe | 0.72 |
+| `oom_kill_resource_misconfiguration` | critical | risky | 0.80 |
+| `misleading_p99_histogram_bucket_saturation` | low | safe | 0.68 |
+
+**Hybrid matching algorithm:**
+1. If `incident_text` supplied → embed → cosine search returns top_k×3 candidates
+2. For each candidate → score thresholds in `pattern_signals` against caller's `signals` dict
+3. `combined_score = 0.6 × rule_score + 0.4 × vector_similarity`
+4. Return top_k sorted by `combined_score` descending
+
+**Embedding:** 384-dim nomic-embed-text via shared `local-llm` Ollama instance.
+Gracefully degrades to NULL embeddings (pure rule matching) when Ollama is offline.
+Run `POST /admin/embed-all` to backfill after Ollama comes online.
 
 ---
 

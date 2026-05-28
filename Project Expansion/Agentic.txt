@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise Agentic AI Platform — OCP 4.20</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#060a12;color:#e2e8f0;
+  font-family:'JetBrains Mono',monospace;
+  min-height:100vh;
+}
+
+/* HEADER */
+header{
+  background:#0a0f1e;
+  border-bottom:2px solid #ee0000;
+  padding:14px 24px;
+  display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:12px;
+  box-shadow:0 2px 30px rgba(238,0,0,0.15);
+}
+.h-title{font-size:1.1em;font-weight:800;letter-spacing:-0.01em}
+.h-title span{color:#ee0000}
+.h-sub{font-size:8px;color:#64748b;margin-top:4px}
+.h-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.h-tag{font-size:7px;font-weight:700;padding:2px 8px;border-radius:10px;border:1px solid;letter-spacing:0.08em}
+
+/* LIVE STATUS */
+#live{
+  background:#0d1525;border:1px solid #1e3354;
+  border-radius:8px;padding:10px 14px;
+  display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;
+  min-width:260px;
+}
+#live h4{
+  grid-column:1/-1;color:#ee0000;
+  font-size:8px;letter-spacing:0.15em;
+  font-weight:800;margin-bottom:6px;
+  padding-bottom:4px;border-bottom:1px solid #1e3354;
+}
+.lv{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.lv-l{font-size:8px;color:#64748b}
+.lv-v{font-size:9px;font-weight:700}
+
+/* DIAGRAM WRAPPER */
+#diagram-wrap{
+  display:flex;
+  padding:16px 20px;
+  gap:16px;
+  min-height:calc(100vh - 110px);
+}
+
+/* LEFT: SWIMLANE STACK */
+#swimlanes{
+  flex:1;
+  display:flex;flex-direction:column;
+  gap:8px;
+  min-width:0;
+}
+
+/* SWIMLANE ROW */
+.swimlane{
+  border-radius:10px;
+  border:1px solid;
+  overflow:hidden;
+}
+.swimlane.primary{
+  border-width:2px;
+  animation:rhPulse 2.5s ease-in-out infinite;
+}
+@keyframes rhPulse{
+  0%,100%{box-shadow:0 0 12px rgba(238,0,0,0.2)}
+  50%    {box-shadow:0 0 32px rgba(238,0,0,0.5)}
+}
+
+/* LANE HEADER */
+.lane-hdr{
+  padding:7px 14px;
+  display:flex;align-items:center;gap:10px;
+  cursor:pointer;user-select:none;
+}
+.lane-hdr-bar{width:3px;height:16px;border-radius:2px;flex-shrink:0}
+.lane-hdr-title{font-size:9px;font-weight:800;letter-spacing:0.1em}
+.lane-hdr-sub{font-size:8px;color:#64748b;margin-left:auto}
+.lane-collapse{font-size:10px;color:#64748b;margin-left:8px;transition:transform 0.2s}
+.swimlane.collapsed .lane-collapse{transform:rotate(-90deg)}
+
+/* LANE CONTENT */
+.lane-body{
+  padding:10px 12px;
+  display:flex;flex-wrap:wrap;gap:8px;
+  border-top:1px solid rgba(255,255,255,0.05);
+  transition:all 0.25s;
+}
+.swimlane.collapsed .lane-body{display:none}
+
+/* COMPONENT CARD */
+.comp{
+  border:1px solid;border-radius:8px;
+  padding:10px 12px;
+  cursor:pointer;
+  transition:all 0.18s;
+  position:relative;
+  min-width:110px;
+  flex:1;
+}
+.comp:hover{transform:translateY(-3px);z-index:5}
+.comp-icon{font-size:18px;margin-bottom:6px}
+.comp-name{font-size:10px;font-weight:700;line-height:1.3;margin-bottom:4px}
+.comp-detail{font-size:8px;color:#64748b;line-height:1.5}
+
+/* BADGES */
+.badge{
+  display:inline-block;
+  font-size:7px;font-weight:800;
+  padding:1px 5px;border-radius:5px;
+  margin-left:5px;vertical-align:middle;
+  letter-spacing:0.04em;
+}
+.b-new   {background:#10b981;color:#000}
+.b-pri   {background:#ee0000;color:#fff}
+.b-agg   {background:#06b6d4;color:#000}
+.b-qs    {background:#ee0000;color:#fff}
+
+/* SPECIAL GLOWS */
+.glow-red   {animation:glowR 2s ease-in-out infinite}
+.glow-cyan  {animation:glowC 2s ease-in-out infinite}
+.glow-purple{animation:glowP 2s ease-in-out infinite}
+.glow-splunk{animation:glowS 2s ease-in-out infinite;flex:2!important;min-width:220px!important}
+
+@keyframes glowR{0%,100%{box-shadow:0 0 6px rgba(238,0,0,0.3)}50%{box-shadow:0 0 18px rgba(238,0,0,0.7)}}
+@keyframes glowC{0%,100%{box-shadow:0 0 6px rgba(6,182,212,0.3)}50%{box-shadow:0 0 18px rgba(6,182,212,0.7)}}
+@keyframes glowP{0%,100%{box-shadow:0 0 6px rgba(139,92,246,0.3)}50%{box-shadow:0 0 18px rgba(139,92,246,0.7)}}
+@keyframes glowS{0%,100%{box-shadow:0 0 10px rgba(238,0,0,0.4)}50%{box-shadow:0 0 28px rgba(238,0,0,0.8)}}
+
+/* FLOW ARROW BETWEEN LANES */
+.flow-arrow{
+  display:flex;align-items:center;
+  gap:8px;padding:2px 14px;
+}
+.fa-line{flex:1;height:2px;border-radius:1px}
+.fa-label{font-size:7.5px;color:#64748b;white-space:nowrap;flex-shrink:0}
+.fa-tip{font-size:9px}
+
+/* RIGHT PANEL */
+#right-panel{
+  width:240px;flex-shrink:0;
+  display:flex;flex-direction:column;gap:12px;
+  overflow-y:auto;
+  max-height:calc(100vh - 110px);
+}
+
+/* PANEL BOXES */
+.pbox{
+  background:#0d1525;
+  border:1px solid #1e3354;
+  border-radius:10px;
+  padding:12px;
+}
+.pbox-title{
+  font-size:8px;font-weight:800;letter-spacing:0.15em;
+  color:#64748b;margin-bottom:10px;
+  padding-bottom:6px;border-bottom:1px solid #1e3354;
+}
+
+/* LEGEND */
+.leg{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.leg-line{width:28px;height:3px;border-radius:2px;flex-shrink:0}
+.leg-text{font-size:8px;color:#94a3b8;line-height:1.4}
+
+/* FLOW STEPS */
+.fstep{
+  display:flex;gap:8px;align-items:flex-start;
+  padding:5px 0;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.fstep-num{
+  width:18px;height:18px;border-radius:50%;
+  font-size:8px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:1px;
+}
+.fstep-info strong{font-size:8.5px;display:block;margin-bottom:2px}
+.fstep-info span{font-size:7.5px;color:#64748b;line-height:1.4}
+
+/* ARCH FACTS */
+.fact-item{
+  display:flex;gap:6px;align-items:flex-start;
+  font-size:8px;margin-bottom:5px;line-height:1.5;
+}
+
+/* TOOLTIP */
+#tooltip{
+  position:fixed;background:rgba(0,0,0,0.95);
+  color:#e2e8f0;padding:12px 14px;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.12);
+  font-size:9px;pointer-events:none;
+  opacity:0;transition:opacity 0.15s;
+  z-index:999;max-width:280px;line-height:1.6;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+}
+#tooltip .tt-name{
+  font-size:10px;font-weight:700;
+  margin-bottom:6px;padding-bottom:5px;
+  border-bottom:1px solid rgba(255,255,255,0.1);
+}
+#tooltip .tt-proto{
+  margin-top:6px;padding-top:5px;
+  border-top:1px solid rgba(255,255,255,0.08);
+  color:#64748b;font-size:8px;
+}
+
+/* CANVAS */
+#flow-canvas{
+  position:fixed;top:0;left:0;
+  width:100%;height:100%;
+  pointer-events:none;z-index:50;
+}
+
+/* FOOTER */
+footer{
+  background:#0a0f1e;border-top:1px solid #1e3354;
+  padding:10px 24px;
+  display:flex;justify-content:space-between;
+  align-items:center;flex-wrap:wrap;gap:8px;
+}
+.foot-stack{font-size:8px;color:#64748b}
+.foot-stats{display:flex;gap:20px}
+.foot-stat .v{font-size:16px;font-weight:800;text-align:center}
+.foot-stat .l{font-size:7px;color:#64748b;letter-spacing:0.1em;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div style="font-size:8px;color:#ee0000;letter-spacing:0.2em;font-weight:700;margin-bottom:3px">
+      ENTERPRISE AGENTIC AI PLATFORM · RED HAT OPENSHIFT 4.20
+    </div>
+    <div class="h-title">OCP Agentic AI <span>// Splunk-Driven Intelligence</span></div>
+    <div class="h-sub">Prometheus → OTel Collector → Splunk 62TB/day → Agents pull via SPL · No Loki/EFK · Kafka = transport only</div>
+    <div class="h-tags">
+      <span class="h-tag" style="color:#ee0000;border-color:#ee000040">OCP 4.20</span>
+      <span class="h-tag" style="color:#06b6d4;border-color:#06b6d440">OTel Collector</span>
+      <span class="h-tag" style="color:#ee0000;border-color:#ee000040">Splunk 62TB/day</span>
+      <span class="h-tag" style="color:#8b5cf6;border-color:#8b5cf640">LangChain Agents</span>
+      <span class="h-tag" style="color:#10b981;border-color:#10b98140">ArgoCD · Ansible</span>
+      <span class="h-tag" style="color:#f59e0b;border-color:#f59e0b40">ServiceNow · GitHub</span>
+    </div>
+  </div>
+  <div id="live">
+    <h4>▶ LIVE SYSTEM STATUS</h4>
+    <div class="lv"><span class="lv-l">🔴 OCP Events/sec</span><span class="lv-v" id="lv1" style="color:#ee0000">18</span></div>
+    <div class="lv"><span class="lv-l">📡 Kafka msgs/sec</span><span class="lv-v" id="lv2" style="color:#06b6d4">542</span></div>
+    <div class="lv"><span class="lv-l">🧠 LLM tokens/min</span><span class="lv-v" id="lv3" style="color:#eab308">6,840</span></div>
+    <div class="lv"><span class="lv-l">⚙ Active agents</span><span class="lv-v" id="lv4" style="color:#10b981">4</span></div>
+    <div class="lv"><span class="lv-l">✅ Remediations</span><span class="lv-v" id="lv5" style="color:#10b981">73</span></div>
+    <div class="lv"><span class="lv-l">⚡ Avg response</span><span class="lv-v" id="lv6" style="color:#06b6d4">2.1s</span></div>
+  </div>
+</header>
+
+<div id="diagram-wrap">
+
+  <!-- SWIMLANES -->
+  <div id="swimlanes"></div>
+
+  <!-- RIGHT PANEL -->
+  <div id="right-panel">
+
+    <!-- LEGEND -->
+    <div class="pbox">
+      <div class="pbox-title">LEGEND — FLOW TYPES</div>
+      <div class="leg"><div class="leg-line" style="background:#ee0000;height:4px"></div><div class="leg-text">THICK RED = OTel → Splunk (full 62TB/day)</div></div>
+      <div class="leg"><div class="leg-line" style="background:#ee0000;height:4px"></div><div class="leg-text">THICK RED ↑ = Splunk → Agents (SPL results)</div></div>
+      <div class="leg"><div class="leg-line" style="background:#f59e0b;height:1px;border-top:2px dashed #f59e0b;background:none"></div><div class="leg-text">DASHED ORANGE = filtered only (OTel→Kafka)</div></div>
+      <div class="leg"><div class="leg-line" style="background:#f59e0b;height:1px;border-top:2px dashed #f59e0b;background:none"></div><div class="leg-text">DASHED ORANGE = Agents → Splunk SPL query</div></div>
+      <div class="leg"><div class="leg-line" style="background:#8b5cf6"></div><div class="leg-text">PURPLE = AI Analytics / LLM inference</div></div>
+      <div class="leg"><div class="leg-line" style="background:#10b981"></div><div class="leg-text">GREEN = Remediation artifacts</div></div>
+      <div class="leg"><div class="leg-line" style="background:#eab308"></div><div class="leg-text">YELLOW = Human approval signal</div></div>
+      <div class="leg"><div class="leg-line" style="background:#14b8a6"></div><div class="leg-text">TEAL = RAG / Knowledge retrieval</div></div>
+      <div class="leg"><div class="leg-line" style="background:#f59e0b"></div><div class="leg-text">ORANGE = Secondary source enrichment</div></div>
+    </div>
+
+    <!-- ARCH FACTS -->
+    <div class="pbox" style="border-color:#ee000030;background:rgba(238,0,0,0.05)">
+      <div class="pbox-title" style="color:#ee0000">⚠ ARCHITECTURE FACTS</div>
+      <div class="fact-item"><span style="color:#10b981;font-weight:700">✓</span><span style="color:#94a3b8">Prometheus → OTel Collector ONLY<br>(remote_write :9090)</span></div>
+      <div class="fact-item"><span style="color:#10b981;font-weight:700">✓</span><span style="color:#94a3b8">OTel → Splunk PRIMARY (62TB/day)<br>OTel → Kafka SECONDARY (filtered)</span></div>
+      <div class="fact-item"><span style="color:#10b981;font-weight:700">✓</span><span style="color:#94a3b8">Agents pull from Splunk via<br>SPL REST API :8089</span></div>
+      <div class="fact-item"><span style="color:#10b981;font-weight:700">✓</span><span style="color:#94a3b8">Kafka = transport only<br>Never feeds agents directly</span></div>
+      <div class="fact-item"><span style="color:#ee0000;font-weight:700">✗</span><span style="color:#64748b">No Loki/EFK — removed</span></div>
+      <div class="fact-item"><span style="color:#ee0000;font-weight:700">✗</span><span style="color:#64748b">Prometheus ↛ Kafka (never direct)</span></div>
+      <div class="fact-item"><span style="color:#ee0000;font-weight:700">✗</span><span style="color:#64748b">Kafka ↛ Agents (never direct)</span></div>
+    </div>
+
+    <!-- FLOW STEPS -->
+    <div class="pbox">
+      <div class="pbox-title">DATA FLOW — 18 STEPS</div>
+      <div id="steps-panel"></div>
+    </div>
+
+  </div>
+
+</div><!-- /diagram-wrap -->
+
+<footer>
+  <div class="foot-stack">
+    Stack: OCP 4.20 · KubeVirt/CNV · OTel Collector · Kafka (transport) ·
+    Splunk 62TB/day · ArgoCD · Ansible · LangChain · pgvector · Keycloak · HashiCorp Vault
+  </div>
+  <div class="foot-stats">
+    <div class="foot-stat"><div class="v" style="color:#3b82f6">8</div><div class="l">LAYERS</div></div>
+    <div class="foot-stat"><div class="v" style="color:#06b6d4">31</div><div class="l">COMPONENTS</div></div>
+    <div class="foot-stat"><div class="v" style="color:#10b981">8</div><div class="l">NEW</div></div>
+    <div class="foot-stat"><div class="v" style="color:#ee0000">SPL</div><div class="l">AGENT QUERY</div></div>
+  </div>
+</footer>
+
+<canvas id="flow-canvas"></canvas>
+<div id="tooltip"></div>
+
+<script>
+// ── COMPONENT DATA ─────────────────────────────────────────────
+const LANES = [
+  {
+    id:'ui', color:'#06b6d4',
+    title:'USER INTERFACE',
+    sublabel:'Swimlane 8',
+    comps:[
+      {
+        id:'react', icon:'⚛', name:'React Portal', color:'#06b6d4',
+        detail:'Web UI · Monitoring dashboard · Remediation approval',
+        proto:'HTTPS :443 via OCP Ingress Router',
+        tip:'User portal for monitoring OCP cluster health, viewing AI Analytics Engine reports, and tracking active agent workflows.'
+      },
+      {
+        id:'apigw', icon:'🔀', name:'API Gateway', color:'#06b6d4',
+        detail:'FastAPI / Kong · Auth · Rate limiting · Routing',
+        proto:'HTTPS :443 → OCP services',
+        tip:'Central ingress point. Validates OIDC tokens from Keycloak, enforces rate limits, routes to correct OCP backend service.'
+      },
+    ]
+  },
+  {
+    id:'approval', color:'#ec4899',
+    title:'HUMAN APPROVAL (HiTL)',
+    sublabel:'Swimlane 7',
+    comps:[
+      {
+        id:'hitl', icon:'👤', name:'HiTL Gate', color:'#ec4899',
+        detail:'Human-in-the-Loop · Blocks until approval',
+        proto:'Webhook receiver :443 · ServiceNow + Teams',
+        tip:'Mandatory approval gate. Holds ALL remediation actions until a human approves the ServiceNow CHG or responds to the MS Teams approval card. On rejection: routes back to Supervisor Agent for re-planning.'
+      },
+      {
+        id:'teams', icon:'💬', name:'MS Teams Bot', color:'#06b6d4',
+        detail:'Approval cards · Alert notifications',
+        proto:'Bot Framework :443 → HiTL webhook',
+        tip:'Sends proactive anomaly alert notifications and approval request cards to operations team. Approval response triggers webhook callback to HiTL Gate pod on OCP.'
+      },
+      {
+        id:'snow-chg', icon:'🎫', name:'ServiceNow CHG', color:'#f59e0b',
+        detail:'Auto-created Change Request\nCI · Risk · Rollback · Playbook link · SPL query used', isNew:true,
+        proto:'REST API :443 HTTPS → HiTL webhook on approve',
+        tip:'Auto-created by Playbook Generator. Contains: Configuration Item, risk level, rollback plan, Ansible playbook link, ArgoCD manifest link, and the SPL query that triggered the remediation. Human approves here → HiTL Gate releases.'
+      },
+    ]
+  },
+  {
+    id:'remediation', color:'#10b981',
+    title:'REMEDIATION OUTPUT',
+    sublabel:'Swimlane 6',
+    comps:[
+      {
+        id:'playgen', icon:'📄', name:'Playbook Generator', color:'#10b981',
+        detail:'Generates: Ansible YAML + ArgoCD ApplicationSet\nPushes: GitHub PR + ServiceNow CHG simultaneously',
+        proto:'Git push :443 · ServiceNow REST :443',
+        tip:'Receives structured LLM output. Generates valid Ansible YAML and ArgoCD ApplicationSet manifests. Simultaneously: pushes GitHub PR for code review AND creates ServiceNow CHG with full remediation details including the SPL query used.'
+      },
+      {
+        id:'argocd', icon:'🔄', name:'ArgoCD', color:'#10b981',
+        detail:'GitOps controller · Watches GitHub\nSyncs manifests to OCP after HiTL approval',
+        proto:'Kubernetes API :6443 · GitHub webhook :443',
+        tip:'GitOps deployment controller. Watches GitHub for new manifests pushed by Playbook Generator. After HiTL Gate approval: auto-syncs the generated ApplicationSet to the OCP cluster via Kubernetes API :6443.'
+      },
+      {
+        id:'ansible', icon:'⚡', name:'Ansible AAP', color:'#10b981',
+        detail:'Executes AI-generated playbooks\non OCP/RHEL hosts after HiTL approval',
+        proto:'Tower API :443 · SSH :22 → OCP workers',
+        tip:'Ansible Automation Platform. After HiTL Gate approval: executes AI-generated Ansible playbook against OCP worker nodes or RHEL hosts. Credentials injected from HashiCorp Vault at runtime.'
+      },
+    ]
+  },
+  {
+    id:'secondary', color:'#f59e0b',
+    title:'SECONDARY DATA SOURCES — Context Enrichment',
+    sublabel:'Swimlane 5 · Queried AFTER Splunk SPL results retrieved',
+    comps:[
+      {
+        id:'github', icon:'🐙', name:'GitHub', color:'#8b5cf6',
+        detail:'READ: IaC templates for context\nWRITE: Ansible PR + ArgoCD AppSet',
+        proto:'REST API :443 · Git push :443',
+        tip:'Dual role: Agents READ IaC templates as reference context. Playbook Generator WRITES Ansible + ArgoCD manifests as a PR for human code review before HiTL approval.'
+      },
+      {
+        id:'snow-src', icon:'🎫', name:'ServiceNow', color:'#f59e0b',
+        detail:'READ: CMDB CI · Open incidents\nWRITE: INC · CHG with SPL query context', isNew:true,
+        proto:'REST API :443 HTTPS · OAuth2 + API Key',
+        tip:'Agents query CMDB for CI relationships and open incidents for enrichment AFTER pulling Splunk SPL data. Also receives auto-created INC/CHG from Playbook Generator with full remediation context.'
+      },
+      {
+        id:'confluence', icon:'📚', name:'Confluence', color:'#f59e0b',
+        detail:'READ: Runbooks · Architecture docs\nQueried after Splunk data retrieved',
+        proto:'REST API :443 · API Token from Vault',
+        tip:'Agents retrieve operational runbooks for the detected issue type AFTER Splunk SPL query returns results. Provides human-authored procedures that inform the LLM inference prompt.'
+      },
+      {
+        id:'jira', icon:'🎯', name:'Jira', color:'#f59e0b',
+        detail:'READ: Change tickets · Backlog\nWRITE: Upgrade tickets (Evergreen agent)',
+        proto:'REST API :443',
+        tip:'Agents link remediation actions to Jira tickets. Evergreen agent creates upgrade tickets with auto-generated acceptance criteria based on Splunk patch_compliance.spl results.'
+      },
+    ]
+  },
+  {
+    id:'agents', color:'#3b82f6',
+    title:'AGENT LAYER',
+    sublabel:'Swimlane 4 · All agents query Splunk via SPL REST :8089',
+    comps:[
+      {
+        id:'supervisor', icon:'🎯', name:'Supervisor Agent', color:'#2563eb',
+        detail:'Orchestrator · Planner · Task decomposer\nReceives: AI Analytics anomaly report\nRoutes: tasks to 6 specialized agents\nOutputs: ServiceNow CHG · GitHub PR',
+        proto:'LangChain orchestration · Kafka agent-bus',
+        tip:'Master orchestrator. Receives ranked anomaly + prediction report from AI Analytics Engine. Decomposes into sub-tasks, routes to correct specialized agent via Kafka message bus. Aggregates results and coordinates ServiceNow CHG creation and GitHub PR.'
+      },
+      {
+        id:'msgbus', icon:'📨', name:'Agent Message Bus', color:'#3b82f6',
+        detail:'Kafka-based async task routing\nDead Letter Queue for failed tasks\nNOT used for telemetry — agents only',
+        proto:'Kafka topics :9092 (agent coordination only)',
+        tip:'Kafka-based async message passing between Supervisor and 6 specialized agents. Dead Letter Queue captures failed tasks for replay or human escalation. This Kafka is only for agent coordination — NOT for telemetry. Agents get data from Splunk :8089.'
+      },
+      {
+        id:'agents6', icon:'🤖', name:'Specialized Agents (6)', color:'#3b82f6',
+        detail:'Compute · Network · Storage · Security · Migration · Evergreen\n\nExecution per agent:\n① Execute domain SPL → Splunk :8089\n② Get SPL results (telemetry slice)\n③ Query Vector DB for RAG context\n④ Enrich: ServiceNow CMDB + Confluence\n⑤ Call LLM Gateway with full context\n⑥ Return analysis → Supervisor Agent',
+        proto:'Splunk REST :8089 · gRPC :443 · OpenAI-compat :8000',
+        tip:'6 OCP domain expert agents. Each pulls data from Splunk using predefined domain SPL queries. Network Agent uses network_disconnect.spl for KubeVirt VM disconnects. Agents NEVER read from Kafka — always use Splunk REST API :8089.'
+      },
+      {
+        id:'llm', icon:'🧠', name:'LLM Gateway', color:'#8b5cf6',
+        detail:'vLLM / Ollama on OCP AI nodes\nModel Router · Prompt Registry\nEval Pipeline · Cost control',
+        proto:'OpenAI-compatible REST :8000 (internal SDN)',
+        tip:'Unified inference endpoint. Routes each agent request to the optimal model based on task type and token budget. Prompt Registry provides versioned domain-specific templates. Eval Pipeline scores response quality for continuous improvement.'
+      },
+      {
+        id:'evergreen', icon:'🌿', name:'Evergreen Agent', color:'#3b82f6',
+        detail:'OCP patch · Upgrade cycle management\nSPL: patch_compliance.spl',
+        proto:'Splunk REST :8089 · Ansible Tower :443',
+        tip:'Uses patch_compliance.spl to query Splunk for version drift and missing patches. Generates OCP upgrade schedule and Ansible playbook. Creates Jira tickets with auto-generated acceptance criteria.'
+      },
+    ]
+  },
+  {
+    id:'knowledge', color:'#14b8a6',
+    title:'KNOWLEDGE & MEMORY (RAG)',
+    sublabel:'Swimlane 3',
+    comps:[
+      {
+        id:'vectordb', icon:'🗂', name:'Vector DB', color:'#14b8a6',
+        detail:'pgvector / Weaviate\nStores: OCP knowledge embeddings\nStores: Correlated incident patterns',
+        proto:'gRPC :443 (internal SDN)',
+        tip:'Stores vectorised OCP telemetry patterns, runbooks, and past incident resolutions. Agents query here for semantic context AFTER pulling Splunk SPL data. AI Analytics Engine also stores correlated patterns here for future reference.'
+      },
+      {
+        id:'embedding', icon:'📐', name:'Embedding Model', color:'#14b8a6',
+        detail:'Sentence Transformers on OCP AI\nConverts OCP knowledge → dense vectors',
+        proto:'OCP AI serving (internal pod)',
+        tip:'Converts OCP knowledge text, runbook content, and incident descriptions into dense vectors for pgvector/Weaviate. Runs on the AI Workload node pool on OCP.'
+      },
+      {
+        id:'episodic', icon:'🧩', name:'Episodic Memory', color:'#14b8a6',
+        detail:'Long-term agent session state\nPast decisions · Outcomes · History', isNew:true,
+        proto:'PostgreSQL :5432 (internal SDN)',
+        tip:'Persistent store of agent session history, past decisions, and remediation outcomes. Prevents repeated remediation attempts for the same issue. Agents check episodic memory before executing a new SPL query.'
+      },
+      {
+        id:'postgres', icon:'🐘', name:'PostgreSQL', color:'#14b8a6',
+        detail:'Cluster event history · Baselines\nConfiguration audit log · :5432',
+        proto:'PostgreSQL :5432 (internal SDN)',
+        tip:'Structured store of OCP cluster event timelines, metric baselines, and remediation audit history. Used by AI Analytics Engine for baseline comparison during anomaly detection.'
+      },
+    ]
+  },
+  {
+    id:'streaming', color:'#f59e0b',
+    title:'STREAMING & OBSERVABILITY',
+    sublabel:'Swimlane 2',
+    comps:[
+      {
+        id:'kafka', icon:'📡', name:'Kafka (AMQ Streams)', color:'#f59e0b',
+        detail:'TRANSPORT PIPELINE ONLY\nReceives: OTel filtered events\nDelivers: → Splunk (routing)\nDoes NOT feed agents directly\nDoes NOT carry full 62TB stream',
+        proto:'Kafka :9092 (internal SDN)',
+        tip:'TRANSPORT ONLY. Receives filtered/sampled critical events from OTel Collector. Delivers to Splunk via Kafka Connect. Agents NEVER read from Kafka — they always use Splunk REST API :8089. Kafka does not carry the full 62TB/day stream.'
+      },
+      {
+        id:'splunk', icon:'🔍', name:'Splunk SIEM', color:'#ee0000',
+        detail:'PRIMARY AGENT DATA SOURCE — 62TB/day\nFull OCP telemetry: Metrics · Logs · Events · Traces · VM data\n\nPredefined SPL query library per agent domain:\ncompute_anomaly.spl  network_disconnect.spl\nstorage_saturation.spl  security_violation.spl\nvm_migration_fail.spl  patch_compliance.spl\n\nAgent query interface: REST API :8089\nAgents PULL — Splunk never pushes',
+        proto:'HEC :8088 (ingest) · REST :8089 (agent queries)',
+        tip:'PRIMARY AGENT DATA SOURCE. All 62TB/day of OCP telemetry is fully indexed here. The 6 specialized agents each query Splunk using predefined domain SPL queries via REST API :8089. Agents pull data — Splunk never pushes. Also directly receives AlertManager critical alerts.'
+      },
+      {
+        id:'ai-engine', icon:'🔮', name:'AI Analytics Engine', color:'#8b5cf6',
+        detail:'Scheduled SPL batch analysis:\n• Anomaly Detection vs rolling baselines\n• Cross-signal Correlation (metrics+events+VM)\n• Predictive Trend Forecasting\n• Root Cause Scoring + Ranking', isNew:true,
+        proto:'Splunk REST :8089 · scheduled batch queries',
+        tip:'Runs scheduled batch SPL queries against Splunk. Detects statistical anomalies against rolling baselines, correlates metrics+events+VM data across signals, forecasts trends, and scores root causes. Sends ranked anomaly + prediction report to Supervisor Agent.'
+      },
+      {
+        id:'spl-lib', icon:'📋', name:'SPL Query Library', color:'#f59e0b',
+        detail:'Predefined domain SPL templates:\ncompute_anomaly.spl\nnetwork_disconnect.spl ← KubeVirt VM disconnects\nstorage_saturation.spl\nsecurity_violation.spl\nvm_migration_fail.spl\npatch_compliance.spl\nVersioned in GitHub · Loaded at agent startup', isNew:true,
+        proto:'Git-versioned · loaded by agents at pod startup',
+        tip:'Predefined SPL query templates for each agent domain. Versioned in GitHub. Each agent loads its domain SPL template at pod startup. network_disconnect.spl is the primary query for the Network Agent handling KubeVirt VM network disconnect issues.'
+      },
+    ]
+  },
+  {
+    id:'ocp', color:'#ee0000',
+    title:'OCP CLUSTER — PRIMARY SOURCE',
+    sublabel:'Swimlane 1 · Prometheus → OTel ONLY · No Loki/EFK',
+    isPrimary:true,
+    comps:[
+      {
+        id:'prometheus', icon:'📈', name:'Prometheus', color:'#ee0000',
+        detail:'Metrics scrape: Node · Pod · VM · :9090\nremote_write → OTel Collector ONLY\nNO direct connection to Kafka',
+        proto:'remote_write :9090 → OTel Collector',
+        tip:'Scrapes all OCP Node, Pod, and KubeVirt VM metrics at :9090. Sends ONLY to OTel Collector via remote_write. NO direct Kafka connection. NO Loki/EFK. OTel Collector is the only downstream target.'
+      },
+      {
+        id:'alertmgr', icon:'🔔', name:'AlertManager', color:'#ee0000',
+        detail:'Alert webhook → OTel Collector :4317\nDirect HEC → Splunk :8088 (fast path)\nNO direct connection to Kafka',
+        proto:'webhook :4317 → OTel · HEC :8088 → Splunk',
+        tip:'Fires alert webhooks to OTel Collector :4317 for aggregation AND directly to Splunk HEC :8088 for fast critical alert indexing. NO direct Kafka connection. Direct Splunk path ensures critical alerts land in Splunk immediately for agent SPL queries.'
+      },
+      {
+        id:'kubevirt', icon:'🖥', name:'KubeVirt/CNV', color:'#ee0000',
+        detail:'VM lifecycle events · Guest OS metrics\nOVS network events · VM disconnect detection\n→ OTel Collector :4317 ONLY',
+        proto:'OTLP :4317 → OTel Collector',
+        tip:'PRIMARY signal for VM network disconnect detection. Emits VM lifecycle events, guest OS metrics, and OVS network flow events to OTel Collector :4317. The network_disconnect.spl SPL query in Splunk targets this data for the Network Agent.'
+      },
+      {
+        id:'otel', icon:'🔭', name:'OTel Collector', color:'#06b6d4',
+        detail:'PRIMARY AGGREGATOR — all telemetry converges here\nReceives: Prometheus metrics (remote_write :9090)\nReceives: OCP app + infra logs (:4318 HTTP)\nReceives: KubeVirt VM events + metrics (:4317)\nReceives: AlertManager webhook alerts (:4317)\nReceives: Agent distributed traces (:4317)\nFilters · Enriches · Samples before export\nExport A → Splunk HEC :8088 (FULL — primary)\nExport B → Kafka :9092 (filtered events only)', isNew:true,
+        proto:'Receives: :4317 OTLP / :4318 HTTP · Exports: HEC :8088 + Kafka :9092',
+        tip:'SINGLE aggregation point for ALL OCP telemetry. Nothing bypasses it (except AlertManager direct to Splunk for speed). Filters, enriches and samples before dual export: full stream to Splunk HEC :8088 (primary) and filtered subset to Kafka :9092 (secondary transport).'
+      },
+      {
+        id:'argocd-ocp', icon:'🔄', name:'ArgoCD (OCP)', color:'#10b981',
+        detail:'GitOps controller on OCP\nWatches GitHub for new manifests\nSyncs after HiTL Gate approval',
+        proto:'k8s API :6443 · GitHub webhook :443',
+        tip:'ArgoCD running on OCP cluster. Watches GitHub repository for manifests pushed by Playbook Generator. Auto-syncs after HiTL Gate approval via Kubernetes API :6443.'
+      },
+      {
+        id:'ocp-hosts', icon:'🖥', name:'OCP Cluster Hosts', color:'#ee0000',
+        detail:'RHCOS worker nodes · Remediation target\nArgoCD manifests applied here\nAnsible playbooks executed here\nPrometheus re-scrapes after fix → loop closes',
+        proto:'k8s API :6443 (ArgoCD) · SSH :22 (Ansible)',
+        tip:'OCP worker nodes running RHCOS. Final target of ArgoCD manifest sync and Ansible playbook execution. After successful remediation, Prometheus metrics return to baseline — telemetry loop closes back to OTel Collector.'
+      },
+    ]
+  },
+];
+
+const FLOW_STEPS = [
+  {n:'①', c:'#ee0000', l:'OCP sources → OTel Collector', d:'Prometheus remote_write :9090 · KubeVirt events :4317 · AlertManager :4317 · OCP logs :4318'},
+  {n:'②', c:'#ee0000', l:'AlertManager → Splunk (direct fast path)', d:'HEC :8088 — critical alerts bypass OTel for immediate indexing in Splunk'},
+  {n:'③', c:'#ee0000', l:'OTel Collector → Splunk HEC :8088', d:'PRIMARY: full 62TB/day telemetry stream — thickest arrow — source of truth'},
+  {n:'④', c:'#f59e0b', l:'OTel Collector → Kafka :9092', d:'SECONDARY: filtered + sampled events only — NOT full stream'},
+  {n:'⑤', c:'#f59e0b', l:'Kafka → Splunk (Kafka Connect)', d:'HEC :8088 — additional event routing to Splunk indexer'},
+  {n:'⑥', c:'#ee0000', l:'Splunk → AI Analytics Engine', d:'Scheduled SPL batch queries for anomaly detection and cross-signal correlation'},
+  {n:'⑦', c:'#8b5cf6', l:'AI Analytics Engine → Supervisor Agent', d:'Ranked anomaly report + prediction signal with root cause scoring'},
+  {n:'⑧', c:'#2563eb', l:'Supervisor → Agent Message Bus', d:'Task decomposition + routing to correct specialized agent domain'},
+  {n:'⑨', c:'#f59e0b', l:'Agents → Splunk REST :8089', d:'Execute predefined domain SPL query (e.g. network_disconnect.spl)'},
+  {n:'⑩', c:'#ee0000', l:'Splunk → Agents (SPL results)', d:'Filtered telemetry slice for agent domain — agents never read Kafka'},
+  {n:'⑪', c:'#14b8a6', l:'Agents → Vector DB (RAG)', d:'Semantic OCP context lookup via gRPC :443'},
+  {n:'⑫', c:'#f59e0b', l:'Agents → ServiceNow + Confluence', d:'CMDB + incident enrichment · Runbook retrieval for issue type'},
+  {n:'⑬', c:'#8b5cf6', l:'Agents → LLM Gateway', d:'Full context inference: SPL results + RAG + runbook → :8000'},
+  {n:'⑭', c:'#10b981', l:'LLM → Playbook Generator', d:'Ansible YAML + ArgoCD ApplicationSet manifest generated'},
+  {n:'⑮', c:'#10b981', l:'Playbook Generator → GitHub PR + ServiceNow CHG', d:'Simultaneous: Git push PR · CHG with CI, risk, rollback, SPL query used'},
+  {n:'⑯', c:'#eab308', l:'Human → HiTL Gate approval', d:'ServiceNow CHG approval webhook :443 OR MS Teams Bot Framework card'},
+  {n:'⑰', c:'#10b981', l:'HiTL → ArgoCD sync + Ansible run', d:'Both triggered simultaneously on human approval'},
+  {n:'⑱', c:'#10b981', l:'ArgoCD + Ansible → OCP Cluster', d:'Remediation applied · Prometheus metrics normalise · Loop closes to ①'},
+];
+
+// ── RENDER ─────────────────────────────────────────────────────
+const swimlanesEl = document.getElementById('swimlanes');
+const stepsEl     = document.getElementById('steps-panel');
+const tipEl       = document.getElementById('tooltip');
+const compEls     = {};
+
+// Render swimlanes
+LANES.forEach((lane,li) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'swimlane' + (lane.isPrimary ? ' primary' : '');
+  wrap.id = 'lane-' + lane.id;
+  wrap.style.borderColor = lane.color + '40';
+  wrap.style.background  = lane.color + (lane.isPrimary ? '10' : '08');
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'lane-hdr';
+  hdr.style.background = lane.color + '14';
+  hdr.innerHTML = `
+    <div class="lane-hdr-bar" style="background:${lane.color};box-shadow:0 0 8px ${lane.color}"></div>
+    <div>
+      <div class="lane-hdr-title" style="color:${lane.color}">${lane.title}</div>
+      ${lane.sublabel ? `<div style="font-size:7px;color:#64748b;margin-top:2px">${lane.sublabel}</div>` : ''}
+    </div>
+    <div class="lane-collapse">▼</div>
+  `;
+  hdr.addEventListener('click', () => {
+    wrap.classList.toggle('collapsed');
+    hdr.querySelector('.lane-collapse').textContent =
+      wrap.classList.contains('collapsed') ? '▶' : '▼';
+  });
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'lane-body';
+
+  lane.comps.forEach(comp => {
+    const card = document.createElement('div');
+    card.className = 'comp' +
+      (comp.id === 'splunk'    ? ' glow-splunk' : '') +
+      (comp.id === 'otel'      ? ' glow-cyan'   : '') +
+      (comp.id === 'ai-engine' ? ' glow-purple'  : '') +
+      (lane.isPrimary && comp.id !== 'argocd-ocp' ? ' glow-red' : '');
+    card.id = 'comp-' + comp.id;
+    card.style.borderColor = comp.color + '50';
+    card.style.background  = comp.color + '0d';
+    card.style.color       = comp.color;
+
+    let nameHtml = comp.name;
+    if (comp.isNew) nameHtml += `<span class="badge b-new">NEW</span>`;
+    if (comp.id === 'otel')   nameHtml += `<span class="badge b-agg">PRIMARY AGGREGATOR</span>`;
+    if (comp.id === 'splunk') nameHtml += `<span class="badge b-qs">62TB/DAY · PRIMARY QUERY STORE</span>`;
+
+    card.innerHTML = `
+      <div class="comp-icon">${comp.icon}</div>
+      <div class="comp-name">${nameHtml}</div>
+      <div class="comp-detail" style="white-space:pre-line">${comp.detail}</div>
+    `;
+
+    // Tooltip
+    card.addEventListener('mouseover', e => {
+      tipEl.innerHTML = `
+        <div class="tt-name" style="color:${comp.color}">${comp.icon} ${comp.name}</div>
+        ${comp.tip}
+        <div class="tt-proto">🔌 ${comp.proto}</div>
+      `;
+      tipEl.style.opacity = '1';
+      moveTip(e);
+    });
+    card.addEventListener('mouseout', () => tipEl.style.opacity = '0');
+
+    body.appendChild(card);
+    compEls[comp.id] = card;
+  });
+
+  wrap.appendChild(hdr);
+  wrap.appendChild(body);
+  swimlanesEl.appendChild(wrap);
+
+  // Flow arrow between lanes
+  if (li < LANES.length - 1) {
+    const arr = document.createElement('div');
+    arr.className = 'flow-arrow';
+    const isPrimary = li === LANES.length - 2;
+    arr.innerHTML = `
+      <div class="fa-line" style="background:${isPrimary ? '#ee0000' : '#1e3354'};height:${isPrimary?3:1}px"></div>
+      <div class="fa-tip">▲</div>
+      <div class="fa-label" style="color:${isPrimary ? '#ee000080' : '#1e3354'}">${isPrimary ? 'PRIMARY TELEMETRY ↑' : ''}</div>
+      <div class="fa-tip">▲</div>
+      <div class="fa-line" style="background:${isPrimary ? '#ee0000' : '#1e3354'};height:${isPrimary?3:1}px"></div>
+    `;
+    swimlanesEl.appendChild(arr);
+  }
+});
+
+// Render flow steps
+FLOW_STEPS.forEach(s => {
+  const div = document.createElement('div');
+  div.className = 'fstep';
+  div.innerHTML = `
+    <div class="fstep-num" style="background:${s.c};color:#000">${s.n}</div>
+    <div class="fstep-info">
+      <strong style="color:${s.c}">${s.l}</strong>
+      <span>${s.d}</span>
+    </div>
+  `;
+  stepsEl.appendChild(div);
+});
+
+// ── TOOLTIP ────────────────────────────────────────────────────
+function moveTip(e) {
+  const x = Math.min(e.clientX + 14, window.innerWidth  - 300);
+  const y = Math.min(e.clientY + 14, window.innerHeight - 160);
+  tipEl.style.left = x + 'px';
+  tipEl.style.top  = y + 'px';
+}
+window.addEventListener('mousemove', e => { if (tipEl.style.opacity==='1') moveTip(e); });
+
+// ── CANVAS PARTICLES ───────────────────────────────────────────
+const canvas = document.getElementById('flow-canvas');
+const ctx    = canvas.getContext('2d');
+
+const CONNECTIONS = [
+  {f:'prometheus', t:'otel',      c:'#ee0000', w:2},
+  {f:'alertmgr',  t:'otel',      c:'#ee0000', w:2},
+  {f:'alertmgr',  t:'splunk',    c:'#ee0000', w:2},
+  {f:'kubevirt',  t:'otel',      c:'#ee0000', w:2},
+  {f:'otel',      t:'splunk',    c:'#ee0000', w:5},
+  {f:'otel',      t:'kafka',     c:'#f59e0b', w:1, dash:true},
+  {f:'kafka',     t:'splunk',    c:'#f59e0b', w:2},
+  {f:'splunk',    t:'ai-engine', c:'#ee0000', w:2},
+  {f:'ai-engine', t:'supervisor',c:'#8b5cf6', w:2},
+  {f:'supervisor',t:'msgbus',    c:'#2563eb', w:2},
+  {f:'msgbus',    t:'agents6',   c:'#3b82f6', w:2},
+  {f:'agents6',   t:'splunk',    c:'#f59e0b', w:1, dash:true},
+  {f:'splunk',    t:'agents6',   c:'#ee0000', w:3},
+  {f:'agents6',   t:'vectordb',  c:'#14b8a6', w:1},
+  {f:'agents6',   t:'snow-src',  c:'#f59e0b', w:1},
+  {f:'agents6',   t:'llm',       c:'#8b5cf6', w:2},
+  {f:'spl-lib',   t:'agents6',   c:'#f59e0b', w:1, dash:true},
+  {f:'ai-engine', t:'vectordb',  c:'#14b8a6', w:1},
+  {f:'llm',       t:'playgen',   c:'#8b5cf6', w:2},
+  {f:'playgen',   t:'snow-chg',  c:'#10b981', w:2},
+  {f:'snow-chg',  t:'hitl',      c:'#eab308', w:2},
+  {f:'hitl',      t:'argocd',    c:'#10b981', w:2},
+  {f:'hitl',      t:'ansible',   c:'#10b981', w:2},
+  {f:'argocd',    t:'ocp-hosts', c:'#10b981', w:2},
+  {f:'ansible',   t:'ocp-hosts', c:'#10b981', w:2},
+];
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function center(id) {
+  const el = compEls[id];
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width/2, y: r.top + r.height/2 };
+}
+
+const particles = [];
+function buildParticles() {
+  particles.length = 0;
+  CONNECTIONS.forEach(conn => {
+    const f = center(conn.f), t = center(conn.t);
+    if (!f || !t) return;
+    const n = conn.w >= 4 ? 5 : conn.w >= 2 ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      particles.push({
+        f: conn.f, t: conn.t,
+        color: conn.c, width: conn.w,
+        dash: conn.dash || false,
+        progress: i / n,
+        speed: 0.0018 + Math.random() * 0.001,
+      });
+    }
+  });
+}
+
+function drawFrame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Static lines
+  CONNECTIONS.forEach(conn => {
+    const f = center(conn.f), t = center(conn.t);
+    if (!f || !t) return;
+    const mx = (f.x+t.x)/2 + (f.y-t.y)*0.18;
+    const my = (f.y+t.y)/2 - (f.x-t.x)*0.18;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.quadraticCurveTo(mx, my, t.x, t.y);
+    ctx.strokeStyle = conn.c + '40';
+    ctx.lineWidth   = conn.w;
+    ctx.setLineDash(conn.dash ? [5,5] : []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrowhead
+    const ang = Math.atan2(t.y - my, t.x - mx);
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(-10, -4); ctx.lineTo(0,0); ctx.lineTo(-10, 4);
+    ctx.strokeStyle = conn.c + '90';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Particles
+  particles.forEach(p => {
+    const f = center(p.f), t = center(p.t);
+    if (!f || !t) return;
+    p.progress += p.speed;
+    if (p.progress > 1) p.progress = 0;
+    const pr = p.progress;
+    const mx = (f.x+t.x)/2 + (f.y-t.y)*0.18;
+    const my = (f.y+t.y)/2 - (f.x-t.x)*0.18;
+    const bx = (1-pr)*(1-pr)*f.x + 2*(1-pr)*pr*mx + pr*pr*t.x;
+    const by = (1-pr)*(1-pr)*f.y + 2*(1-pr)*pr*my + pr*pr*t.y;
+    const r  = p.width >= 4 ? 6 : p.width >= 2 ? 4 : 3;
+    const g  = ctx.createRadialGradient(bx,by,0,bx,by,r*2.5);
+    g.addColorStop(0, p.color + 'ee');
+    g.addColorStop(1, p.color + '00');
+    ctx.beginPath(); ctx.arc(bx,by,r*2,0,Math.PI*2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); ctx.arc(bx,by,r*0.5,0,Math.PI*2);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+  });
+
+  requestAnimationFrame(drawFrame);
+}
+
+resize();
+window.addEventListener('resize', () => { resize(); buildParticles(); });
+window.addEventListener('scroll', buildParticles);
+setTimeout(() => { buildParticles(); drawFrame(); }, 500);
+
+// ── LIVE STATS ─────────────────────────────────────────────────
+let rm = 73;
+setInterval(() => {
+  document.getElementById('lv1').textContent = Math.floor(Math.random()*16)+12;
+  document.getElementById('lv2').textContent = Math.floor(Math.random()*400)+528;
+  document.getElementById('lv3').textContent = (Math.floor(Math.random()*5000)+4200).toLocaleString();
+  document.getElementById('lv4').textContent = Math.floor(Math.random()*3)+3;
+  if (Math.random()>0.5) { rm++; document.getElementById('lv5').textContent = rm; }
+  document.getElementById('lv6').textContent = (Math.random()*2.2+1.2).toFixed(1)+'s';
+}, 2500);
+</script>
+</body>
+</html>

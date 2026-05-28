@@ -716,6 +716,8 @@ async def _xyops_post(path: str, body: dict) -> dict:
     so it appears as a CLIENT span in Tempo nested under the current span.
     Returns the parsed JSON or an error dict on failure.
     """
+    if _http is None:
+        return {"error": "http client not ready"}
     try:
         resp = await _http.post(path, json=body)
         if resp.status_code >= 400:
@@ -734,6 +736,8 @@ async def _xyops_post(path: str, body: dict) -> dict:
 
 async def _xyops_get(path: str) -> dict:
     """GET from xyOps REST API with the same instrumentation as _xyops_post."""
+    if _http is None:
+        return {"rows": [], "error": "http client not ready"}
     try:
         resp = await _http.get(path, headers=_xyops_headers())
         if resp.status_code >= 400:

@@ -18,9 +18,10 @@ import streamlit as st
 COMPUTE_AGENT_URL    = os.getenv("COMPUTE_AGENT_URL",    "http://compute-agent:9000")
 STORAGE_AGENT_URL    = os.getenv("STORAGE_AGENT_URL",    "http://storage-agent:9001")
 OBS_INTELLIGENCE_URL = os.getenv("OBS_INTELLIGENCE_URL", "http://obs-intelligence:9100")
+PATTERN_LIBRARY_URL  = os.getenv("PATTERN_LIBRARY_URL",  "http://pattern-library:9300")
 GITEA_URL            = os.getenv("GITEA_URL",            "http://gitea:3000")
 GITEA_USER           = os.getenv("GITEA_ADMIN_USER",     "aiops")
-GITEA_PASS           = os.getenv("GITEA_ADMIN_PASS",     "Aiops1234!")
+GITEA_PASS           = os.getenv("GITEA_ADMIN_PASS",     "")
 GITEA_ORG            = os.getenv("GITEA_ORG",            "aiops-org")
 GITEA_REPO           = os.getenv("GITEA_REPO",           "ansible-playbooks")
 XYOPS_URL            = os.getenv("XYOPS_URL",            "http://xyops:5522")
@@ -36,6 +37,7 @@ COMPUTE_EXT      = "http://localhost:9000"
 STORAGE_EXT      = "http://localhost:9001"
 OBS_INTEL_EXT    = "http://localhost:9100"
 ANSIBLE_EXT      = "http://localhost:8080"
+PATTERN_LIB_EXT  = "http://localhost:9300"
 
 # ─── HTTP helpers ──────────────────────────────────────────────────────────────
 
@@ -90,7 +92,14 @@ def since_str(val) -> str:
 
 
 def sev_icon(sev: str) -> str:
-    return {"critical": "🔴", "warning": "🟡", "info": "🔵"}.get(str(sev).lower(), "⚪")
+    return {
+        "critical": "🔴",
+        "high":     "🟠",
+        "warning":  "🟡",
+        "medium":   "🟡",
+        "info":     "🔵",
+        "low":      "🔵",
+    }.get(str(sev).lower(), "⚪")
 
 
 def status_icon(st_: str) -> str:
@@ -186,6 +195,7 @@ def sidebar_controls() -> None:
         st.markdown(f"[🤖 Compute API]({COMPUTE_EXT}/docs)")
         st.markdown(f"[🗄️ Storage API]({STORAGE_EXT}/docs)")
         st.markdown(f"[🧠 Obs-Intel API]({OBS_INTEL_EXT}/docs)")
+        st.markdown(f"[🔬 Pattern Library]({PATTERN_LIB_EXT}/docs)")
 
 
 def page_header(title: str) -> None:

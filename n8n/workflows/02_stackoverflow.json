@@ -1,0 +1,134 @@
+{
+  "id": "stackoverflow-otel-v1",
+  "name": "02 · Stack Overflow OTel → Pattern Library",
+  "active": true,
+  "meta": { "templateCredsSetupCompleted": true },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": [{ "name": "discovery" }, { "name": "stackoverflow" }],
+  "nodes": [
+    {
+      "id": "sch-1",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [120, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      }
+    },
+    {
+      "id": "req-so",
+      "name": "SO – OTel Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.stackexchange.com/2.3/questions",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "tagged",   "value": "opentelemetry" },
+            { "name": "sort",     "value": "votes" },
+            { "name": "order",    "value": "desc" },
+            { "name": "filter",   "value": "withbody" },
+            { "name": "site",     "value": "stackoverflow" },
+            { "name": "pagesize", "value": "50" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/json" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "code-1",
+      "name": "Filter & Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "// Stack Overflow API returns { items: [...], has_more: bool, quota_remaining: int }\n// items[0].json is the full response object\n\nconst response = items[0].json;\nconst questions = (response && response.items) ? response.items : [];\n\nconst output = [];\n\nfor (const q of questions) {\n  // Quality gate: must have meaningful vote score\n  if ((q.score || 0) < 5) continue;\n\n  // Only keep unanswered or low-answer-count questions (unresolved pain)\n  // answered = true means accepted answer exists — still valid as a pattern source\n\n  output.push({\n    json: {\n      source:    'stackoverflow',\n      source_id: `so-${q.question_id}`,\n      url:       q.link || '',\n      title:     q.title || '',\n      body:     (q.body || '').replace(/<[^>]+>/g, '').substring(0, 4000), // strip HTML\n      author:    (q.owner && q.owner.display_name) || 'unknown',\n      score:     q.score || 0,\n      tags:      q.tags || []\n    }\n  });\n}\n\nif (output.length === 0) {\n  return [{ json: { _skip: true, reason: 'no qualifying questions' } }];\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Skip Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [840, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json._skip }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "post-1",
+      "name": "POST → Pattern Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300],
+      "parameters": {
+        "method":      "POST",
+        "url":         "={{ $env.PATTERN_LIBRARY_URL }}/issues/raw",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody":    true,
+        "contentType": "json",
+        "body":        "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout":            10000,
+          "ignoreResponseCode": true,
+          "response":           { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "noop-done",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1320, 300],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [[{ "node": "SO – OTel Questions", "type": "main", "index": 0 }]]
+    },
+    "SO – OTel Questions": {
+      "main": [[{ "node": "Filter & Transform", "type": "main", "index": 0 }]]
+    },
+    "Filter & Transform": {
+      "main": [[{ "node": "Skip Empty", "type": "main", "index": 0 }]]
+    },
+    "Skip Empty": {
+      "main": [
+        [{ "node": "POST → Pattern Library", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "POST → Pattern Library": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  }
+}

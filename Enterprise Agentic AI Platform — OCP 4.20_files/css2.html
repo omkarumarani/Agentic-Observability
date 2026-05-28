@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise Agentic AI Platform — Dual DC Active/Passive</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#020408;--card:#0a1020;--border:#1e3354;
+  --text:#c8d8e8;--muted:#4a6080;--dim:#8090a0;
+  --active:#00d4ff;--passive:#00ff88;
+  --rh:#ee0000;--warn:#f59e0b;--purple:#8b5cf6;
+  --teal:#14b8a6;--green:#10b981;--yellow:#eab308;
+  --font:'Share Tech Mono',monospace;--raj:'Rajdhani',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,212,255,0.012) 2px,rgba(0,212,255,0.012) 4px);
+  pointer-events:none;z-index:999}
+
+/* HEADER */
+header{background:linear-gradient(135deg,#020810,#0a1628);border-bottom:1px solid var(--active);
+  padding:10px 20px;display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:8px;box-shadow:0 0 30px rgba(0,212,255,0.12);position:relative;z-index:100}
+.h-logo{font-family:var(--raj);font-size:1.2em;font-weight:800;letter-spacing:.05em;color:var(--active);text-shadow:0 0 18px rgba(0,212,255,.5)}
+.h-logo span{color:#fff}
+.h-sub{font-size:8px;color:var(--muted);margin-top:2px;letter-spacing:.12em}
+.h-pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:flex;align-items:center;gap:5px;font-size:8px;padding:3px 9px;border-radius:20px;border:1px solid;font-family:var(--raj);font-weight:600;letter-spacing:.06em}
+.dot{width:6px;height:6px;border-radius:50%;animation:blink 1.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* CONTROLS */
+#controls{background:#040810;border-bottom:1px solid #0e2040;padding:8px 20px;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.clabel{font-size:8px;color:var(--muted);letter-spacing:.12em;margin-right:2px}
+.btn{font-family:var(--font);font-size:8px;padding:5px 12px;border-radius:4px;
+  border:1px solid;cursor:pointer;letter-spacing:.06em;transition:all .18s;background:transparent}
+.btn:hover{transform:translateY(-1px)}
+.b-cyan{border-color:var(--active);color:var(--active)}.b-cyan:hover{background:rgba(0,212,255,.12);box-shadow:0 0 10px rgba(0,212,255,.25)}
+.b-red{border-color:var(--rh);color:var(--rh)}.b-red:hover{background:rgba(238,0,0,.12)}
+.b-grn{border-color:var(--green);color:var(--green)}.b-grn:hover{background:rgba(16,185,129,.12)}
+.b-orn{border-color:var(--warn);color:var(--warn)}.b-orn:hover{background:rgba(245,158,11,.12)}
+.b-pur{border-color:var(--purple);color:var(--purple)}.b-pur:hover{background:rgba(139,92,246,.12)}
+.b-tea{border-color:var(--teal);color:var(--teal)}.b-tea:hover{background:rgba(20,184,166,.12)}
+.sep{width:1px;height:18px;background:#1e3354}
+
+/* LOG BAR */
+#logbar{background:#030608;border-bottom:1px solid #0a1820;padding:5px 20px;
+  display:flex;gap:8px;align-items:center;min-height:28px;overflow:hidden}
+.ll{font-size:7px;color:var(--muted);letter-spacing:.12em;flex-shrink:0}
+.le{font-size:8px;white-space:nowrap;opacity:0;animation:fadeIn .3s ease forwards}
+@keyframes fadeIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+
+/* MAIN GRID */
+#main{display:grid;grid-template-columns:1fr 110px 1fr;gap:0;padding:12px 14px;
+  position:relative;min-height:calc(100vh - 148px)}
+
+/* DC PANELS */
+.dcp{border-radius:10px;border:2px solid;padding:10px;
+  display:flex;flex-direction:column;gap:7px;position:relative;overflow:hidden}
+.dcp::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,currentColor,transparent);opacity:.5}
+.dc1{border-color:#00d4ff35;background:linear-gradient(135deg,#08122200,#04091800)}
+.dc2{border-color:#00ff8835;background:linear-gradient(135deg,#08180800,#04120400)}
+
+.dc-hdr{display:flex;justify-content:space-between;align-items:flex-start;
+  padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+.dc-title{font-family:var(--raj);font-size:1em;font-weight:700;letter-spacing:.06em}
+.dc-badge{font-size:7px;font-weight:600;padding:2px 8px;border-radius:10px;border:1px solid;font-family:var(--raj)}
+.hb{display:flex;align-items:center;gap:6px;font-size:7px;color:var(--muted);margin-top:3px}
+.hb-bar{display:flex;gap:1px;align-items:flex-end}
+.hbt{width:3px;border-radius:1px;animation:hbpulse 1.2s ease-in-out infinite}
+@keyframes hbpulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ZONES */
+.zone{border-radius:7px;border:1px solid rgba(255,255,255,.05);padding:8px;margin-bottom:4px}
+.zt{font-size:7px;letter-spacing:.12em;margin-bottom:6px;display:flex;align-items:center;gap:5px;font-weight:400}
+.zd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+/* SERVER CARDS */
+.sg{display:flex;flex-wrap:wrap;gap:5px}
+.srv{border:1px solid;border-radius:6px;padding:6px 8px;cursor:pointer;
+  transition:all .18s;position:relative;min-width:80px;flex:1}
+.srv:hover{transform:translateY(-2px);z-index:20}
+.srv.off{opacity:.35;filter:grayscale(.8)}
+.srv.warn{animation:warnP 1.2s ease-in-out infinite}
+@keyframes warnP{0%,100%{border-color:currentColor}50%{border-color:var(--warn)}}
+.si{font-size:13px;margin-bottom:3px}
+.sn{font-size:8.5px;font-weight:400;line-height:1.3;margin-bottom:2px}
+.sd{font-size:7px;color:var(--muted);line-height:1.4}
+.ss{position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%}
+.ok{background:var(--green);box-shadow:0 0 5px var(--green)}
+.rep{background:var(--passive);box-shadow:0 0 5px var(--passive);animation:blink 2s infinite}
+.off-dot{background:#333}
+.warn-dot{background:var(--warn);box-shadow:0 0 5px var(--warn);animation:blink .8s infinite}
+
+/* CENTER LINK */
+.clink{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:0 6px}
+.cl-lbl{font-size:7px;color:var(--muted);letter-spacing:.08em;writing-mode:vertical-lr;text-align:center}
+.cl-wire{flex:1;width:2px;border-radius:1px;min-height:40px;position:relative;overflow:hidden}
+.cl-info{font-size:7px;color:var(--dim);text-align:center;line-height:1.5;
+  padding:4px 5px;border:1px solid rgba(255,255,255,.07);border-radius:4px;
+  background:rgba(0,0,0,.3)}
+.rep-row{display:flex;align-items:center;gap:6px;font-size:7px;
+  padding:4px 8px;background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.18);
+  border-radius:4px;margin-top:4px}
+
+/* SIM PANEL */
+#simp{position:fixed;bottom:16px;right:16px;background:rgba(2,8,16,.96);
+  border:1px solid var(--active);border-radius:8px;padding:12px;width:220px;
+  z-index:200;font-size:8px;box-shadow:0 0 30px rgba(0,212,255,.12)}
+#simp h4{font-family:var(--raj);font-size:10px;font-weight:700;color:var(--active);
+  margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid rgba(0,212,255,.18);letter-spacing:.1em}
+.sm{display:flex;justify-content:space-between;margin-bottom:4px}
+.sl{color:var(--muted)}.sv{font-weight:400}
+
+/* LEGEND */
+#legend{padding:8px 20px;background:#030608;border-top:1px solid #0e2040;
+  display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.li{display:flex;align-items:center;gap:5px;font-size:7.5px;color:var(--dim)}
+.ll2{width:22px;height:2px;border-radius:1px}
+
+/* CANVAS */
+#fc{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:500}
+
+/* TOOLTIP */
+#tip{position:fixed;background:rgba(2,8,16,.97);color:var(--text);
+  padding:10px 14px;border-radius:6px;border:1px solid var(--active);
+  font-size:8.5px;pointer-events:none;opacity:0;transition:opacity .15s;
+  z-index:9999;max-width:270px;line-height:1.7;box-shadow:0 0 24px rgba(0,212,255,.18)}
+#tip .tt{font-family:var(--raj);font-size:10px;font-weight:700;
+  margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid rgba(0,212,255,.18)}
+#tip .ts{color:var(--muted);font-size:7.5px;margin-top:4px}
+
+/* FAILOVER FLASH */
+#fov{position:fixed;inset:0;pointer-events:none;z-index:490;display:none;
+  animation:fovFlash .6s ease infinite}
+@keyframes fovFlash{0%,100%{background:rgba(238,0,0,.02)}50%{background:rgba(238,0,0,.07)}}
+</style>
+</head>
+<body>
+<canvas id="fc"></canvas>
+<div id="fov"></div>
+<div id="tip"></div>
+
+<header>
+  <div>
+    <div class="h-logo">ENTERPRISE<span> AGENTIC AI</span> PLATFORM</div>
+    <div class="h-sub">DUAL DATA CENTER · ACTIVE/PASSIVE · BANKING GRADE · ISO 27001 · SOC 2 TYPE II · FIPS 140-2</div>
+  </div>
+  <div class="h-pills">
+    <div class="pill" style="color:var(--active);border-color:#00d4ff35"><div class="dot" style="background:var(--active)"></div>DC1 MUMBAI ACTIVE</div>
+    <div class="pill" id="p-dc2" style="color:var(--passive);border-color:#00ff8835"><div class="dot" style="background:var(--passive)"></div>DC2 PUNE PASSIVE</div>
+    <div class="pill" style="color:var(--green);border-color:#10b98135"><div class="dot" style="background:var(--green)"></div>REPLICATION OK</div>
+    <div class="pill" style="color:var(--purple);border-color:#8b5cf635"><div class="dot" style="background:var(--purple)"></div>RTO&lt;15M · RPO&lt;5M</div>
+  </div>
+</header>
+
+<div id="controls">
+  <span class="clabel">SIMULATE:</span>
+  <button class="btn b-cyan"  onclick="simFlow()">▶ Live Data Flow</button>
+  <button class="btn b-red"   onclick="simDC1Fail()">💥 DC1 Failure</button>
+  <button class="btn b-grn"   onclick="simFailover()">🔄 Failover DC2</button>
+  <button class="btn b-orn"   onclick="simSPL()">🔍 Agent SPL Query</button>
+  <button class="btn b-pur"   onclick="simLLM()">🧠 LLM Inference</button>
+  <button class="btn b-tea"   onclick="simRemediation()">⚡ Full Remediation</button>
+  <div class="sep"></div>
+  <button class="btn b-red"   onclick="simAttack()">🛡 Cyber Attack</button>
+  <button class="btn b-grn"   onclick="resetAll()">↺ Reset</button>
+</div>
+
+<div id="logbar">
+  <div class="ll">SYS ►</div>
+  <div id="les" style="display:flex;gap:14px;overflow:hidden;flex:1"></div>
+</div>
+
+<div id="main">
+
+  <!-- DC1 ACTIVE -->
+  <div class="dcp dc1" id="dc1p">
+    <div class="dc-hdr">
+      <div>
+        <div class="dc-title" style="color:var(--active)">🏢 DATA CENTER 1 — MUMBAI &nbsp;<span style="font-size:7px;background:rgba(238,0,0,.12);border:1px solid rgba(238,0,0,.3);color:#ff6060;padding:1px 6px;border-radius:3px;font-family:var(--raj);font-weight:600">🔒 TIER 4</span></div>
+        <div class="hb">
+          <div class="hb-bar">
+            <div class="hbt" style="background:var(--active);height:7px;animation-delay:.0s"></div>
+            <div class="hbt" style="background:var(--active);height:4px;animation-delay:.2s"></div>
+            <div class="hbt" style="background:var(--active);height:11px;animation-delay:.4s"></div>
+            <div class="hbt" style="background:var(--active);height:5px;animation-delay:.6s"></div>
+            <div class="hbt" style="background:var(--active);height:9px;animation-delay:.8s"></div>
+            <div class="hbt" style="background:var(--active);height:4px;animation-delay:1.0s"></div>
+          </div>
+          HEARTBEAT OK · 0.4ms
+        </div>
+      </div>
+      <div class="dc-badge" style="color:var(--active);border-color:#00d4ff35;background:rgba(0,212,255,.07)">● ACTIVE PRIMARY</div>
+    </div>
+
+    <!-- PERIMETER -->
+    <div class="zone" style="border-color:#ee000028;background:rgba(238,0,0,.03)">
+      <div class="zt" style="color:var(--rh)"><div class="zd" style="background:var(--rh)"></div>PERIMETER SECURITY</div>
+      <div class="sg">
+        <div class="srv" id="d1fw" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.05)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔥 Next-Gen Firewall Cluster</div>Palo Alto PA-7000 HA Pair<br>SSL/TLS Inspection · IPS/IDS · Anti-DDoS<br>Zero-trust enforcement · Deep packet inspection<div class='ts'>Throughput: 200Gbps · Sessions: 64M</div>">
+          <div class="ss ok"></div><div class="si">🔥</div>
+          <div class="sn">NGFW Cluster</div><div class="sd">PA-7000 · HA Pair<br>IPS/IDS · Anti-DDoS</div>
+        </div>
+        <div class="srv" id="d1waf" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.05)"
+          data-t="<div class='tt' style='color:var(--rh)'>🛡 WAF / DDoS Protection</div>F5 BIG-IP Advanced WAF<br>OWASP Top 10 · Bot mitigation · API security<br>Blocks SQL injection, XSS, CSRF<div class='ts'>Throughput: 40Gbps</div>">
+          <div class="ss ok"></div><div class="si">🛡</div>
+          <div class="sn">WAF / DDoS</div><div class="sd">F5 BIG-IP WAF<br>OWASP Top 10</div>
+        </div>
+        <div class="srv" id="d1lb" style="color:var(--active);border-color:#00d4ff35;background:rgba(0,212,255,.05)"
+          data-t="<div class='tt' style='color:var(--active)'>⚖ Load Balancer</div>F5 BIG-IP LTM HA Pair<br>SSL offload · Health checks · GSLB<br>Distributes to OCP Ingress Routers<div class='ts'>40Gbps · Active/Standby</div>">
+          <div class="ss ok"></div><div class="si">⚖</div>
+          <div class="sn">Load Balancer</div><div class="sd">F5 BIG-IP LTM<br>GSLB · SSL Offload</div>
+        </div>
+        <div class="srv" id="d1bast" style="color:var(--warn);border-color:#f59e0b35;background:rgba(245,158,11,.05)"
+          data-t="<div class='tt' style='color:var(--warn)'>🔐 Bastion / PAM</div>RHEL 9 Hardened Jump Host<br>CyberArk Privileged Access Management<br>MFA enforced · Session recording · Audit log<div class='ts'>All admin access through here</div>">
+          <div class="ss ok"></div><div class="si">🔐</div>
+          <div class="sn">Bastion / PAM</div><div class="sd">CyberArk · MFA<br>Session Record</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCP CLUSTER -->
+    <div class="zone" style="border-color:#00d4ff20;background:rgba(0,212,255,.02)">
+      <div class="zt" style="color:var(--active)"><div class="zd" style="background:var(--active)"></div>RED HAT OPENSHIFT 4.20 — PRIMARY CLUSTER</div>
+      <div class="sg">
+        <div class="srv" id="d1masters" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.04)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔴 OCP Control Plane</div>3× Master Nodes — RHCOS<br>etcd cluster · kube-apiserver :6443<br>OCP API Server · Scheduler · Controller<div class='ts'>8 vCPU · 32GB RAM · 200GB NVMe each</div>">
+          <div class="ss ok"></div><div class="si">🔴</div>
+          <div class="sn">Control Plane</div><div class="sd">3× Masters · RHCOS<br>etcd · API :6443</div>
+        </div>
+        <div class="srv" id="d1gpu" style="color:var(--purple);border-color:#8b5cf635;background:rgba(139,92,246,.05)"
+          data-t="<div class='tt' style='color:var(--purple)'>🧠 GPU AI Worker Nodes</div>2× GPU Nodes — NVIDIA L40S 48GB VRAM<br>Node 1: Granite 3.1 8B (vLLM :8000)<br>Node 2: Llama 3.1 8B (vLLM :8001)<br>Both always warm — instant fallback<div class='ts'>32 vCPU · 128GB RAM · L40S 48GB VRAM each</div>">
+          <div class="ss ok"></div><div class="si">🧠</div>
+          <div class="sn">GPU AI Nodes</div><div class="sd">2× L40S 48GB<br>Granite + Llama</div>
+        </div>
+        <div class="srv" id="d1agents" style="color:#3b82f6;border-color:#3b82f635;background:rgba(59,130,246,.05)"
+          data-t="<div class='tt' style='color:#3b82f6'>🤖 Agent Worker Nodes</div>4× Standard Worker Nodes<br>Runs: Supervisor Agent · 6 Specialized Agent pods<br>LLM Gateway · Playbook Generator · HiTL Gate<div class='ts'>16 vCPU · 64GB RAM · 200GB NVMe each</div>">
+          <div class="ss ok"></div><div class="si">🤖</div>
+          <div class="sn">Agent Workers</div><div class="sd">4× Nodes<br>6 Agent Pods</div>
+        </div>
+        <div class="srv" id="d1kv" style="color:var(--active);border-color:#00d4ff35;background:rgba(0,212,255,.04)"
+          data-t="<div class='tt' style='color:var(--active)'>🖥 KubeVirt/CNV Nodes</div>4× KubeVirt Worker Nodes<br>Runs: Production Guest VMs (RHEL + Windows)<br>OVN-Kubernetes CNI · OVS bridge<br>VM network disconnect — primary use case<div class='ts'>16 vCPU · 64GB RAM · 2TB vSAN each</div>">
+          <div class="ss ok"></div><div class="si">🖥</div>
+          <div class="sn">KubeVirt/CNV</div><div class="sd">4× Nodes · VMs<br>OVN-K8s · OVS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OBSERVABILITY (expanded — all components visible) -->
+    <div class="zone" style="border-color:#ee000028;background:rgba(238,0,0,.03)">
+      <div class="zt" style="color:var(--rh)"><div class="zd" style="background:var(--rh)"></div>OBSERVABILITY & TELEMETRY PIPELINE — PRIMARY SOURCE</div>
+      <div class="sg">
+        <div class="srv" id="d1prom" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.05)"
+          data-t="<div class='tt' style='color:var(--rh)'>📈 Prometheus</div>Scrapes all OCP metrics every 30s<br>Node · Pod · VM · Container metrics<br>remote_write → OTel Collector ONLY<br>NO direct Kafka connection<div class='ts'>Port :9090 · remote_write :9090</div>">
+          <div class="ss ok"></div><div class="si">📈</div>
+          <div class="sn">Prometheus</div><div class="sd">Metrics :9090<br>→ OTel ONLY</div>
+        </div>
+        <div class="srv" id="d1alert" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.05)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔔 AlertManager</div>Fires alert webhooks to OTel Collector :4317<br>ALSO direct path to Splunk HEC :8088<br>for critical alerts (speed priority)<br>NO direct Kafka connection<div class='ts'>Port :9093 · webhook :4317 · HEC :8088</div>">
+          <div class="ss ok"></div><div class="si">🔔</div>
+          <div class="sn">AlertManager</div><div class="sd">Alerts :9093<br>→ OTel + Splunk</div>
+        </div>
+        <div class="srv" id="d1otel" style="color:var(--active);border-color:#00d4ff45;background:rgba(0,212,255,.07)"
+          data-t="<div class='tt' style='color:var(--active)'>🔭 OTel Collector — PRIMARY AGGREGATOR</div>ALL telemetry converges here first<br>Receives: Prometheus :9090 · OCP logs :4318<br>Receives: KubeVirt events :4317 · AlertManager :4317<br>Receives: Agent traces :4317<br>Export A → Splunk HEC :8088 (FULL — 62TB/day)<br>Export B → Kafka :9092 (filtered events only)<div class='ts'>NEW · Port :4317 OTLP · :4318 HTTP</div>">
+          <div class="ss ok"></div><div class="si">🔭</div>
+          <div class="sn">OTel Collector<br><span style="font-size:6.5px;background:var(--active);color:#000;padding:0 3px;border-radius:2px">PRIMARY AGG</span></div>
+          <div class="sd">All telemetry funnels<br>:4317 · :4318</div>
+        </div>
+        <div class="srv" id="d1kafka" style="color:var(--warn);border-color:#f59e0b35;background:rgba(245,158,11,.05)"
+          data-t="<div class='tt' style='color:var(--warn)'>📡 Kafka — AMQ Streams</div>TRANSPORT PIPELINE ONLY<br>Receives: OTel filtered/sampled events<br>Delivers: → Splunk via Kafka Connect HEC :8088<br>Does NOT feed agents directly<br>Does NOT carry full 62TB/day stream<div class='ts'>Port :9092 · AMQ Streams on OCP</div>">
+          <div class="ss ok"></div><div class="si">📡</div>
+          <div class="sn">Kafka (AMQ)</div><div class="sd">Transport :9092<br>Filtered only</div>
+        </div>
+        <div class="srv" id="d1tempo" style="color:var(--purple);border-color:#8b5cf635;background:rgba(139,92,246,.04)"
+          data-t="<div class='tt' style='color:var(--purple)'>🕸 Tempo — Distributed Tracing</div>Receives agent call spans from OTel :4317<br>Stores distributed traces for all AI agent calls<br>LLM inference traces · SPL query traces<br>Jaeger-compatible UI<div class='ts'>Port :4317 OTLP · Jaeger UI :16686</div>">
+          <div class="ss ok"></div><div class="si">🕸</div>
+          <div class="sn">Tempo / Traces</div><div class="sd">Agent spans<br>:4317 OTLP</div>
+        </div>
+        <div class="srv" id="d1grafana" style="color:var(--warn);border-color:#f59e0b35;background:rgba(245,158,11,.04)"
+          data-t="<div class='tt' style='color:var(--warn)'>📊 Grafana</div>Unified observability dashboard<br>Sources: Prometheus · Tempo · Loki<br>OCP cluster health · Agent performance<br>AI Analytics Engine metrics<div class='ts'>Port :3000 · OCP Route exposed</div>">
+          <div class="ss ok"></div><div class="si">📊</div>
+          <div class="sn">Grafana</div><div class="sd">Dashboards :3000<br>Prom · Tempo</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLATFORM SERVICES -->
+    <div class="zone" style="border-color:#14b8a620;background:rgba(20,184,166,.02)">
+      <div class="zt" style="color:var(--teal)"><div class="zd" style="background:var(--teal)"></div>OCP PLATFORM SERVICES</div>
+      <div class="sg">
+        <div class="srv" id="d1argocd" style="color:var(--green);border-color:#10b98135;background:rgba(16,185,129,.04)"
+          data-t="<div class='tt' style='color:var(--green)'>🔄 ArgoCD</div>GitOps controller — watches GitHub<br>Applies remediation manifests after HiTL<br>Kubernetes API :6443 for sync<div class='ts'>Port :8080 · k8s API :6443</div>">
+          <div class="ss ok"></div><div class="si">🔄</div>
+          <div class="sn">ArgoCD</div><div class="sd">GitOps · :8080<br>k8s API :6443</div>
+        </div>
+        <div class="srv" id="d1keycloak" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.04)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔑 Keycloak — IAM</div>OIDC / OAuth2 / RBAC<br>All user + agent tokens validated here<br>Workload Identity for agent pods<div class='ts'>Port :8443 · FIPS 140-2</div>">
+          <div class="ss ok"></div><div class="si">🔑</div>
+          <div class="sn">Keycloak IAM</div><div class="sd">OIDC/RBAC<br>:8443</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATA SERVICES -->
+    <div class="zone" style="border-color:#14b8a620;background:rgba(20,184,166,.02)">
+      <div class="zt" style="color:var(--teal)"><div class="zd" style="background:var(--teal)"></div>DATA SERVICES — DEDICATED PHYSICAL SERVERS</div>
+      <div class="sg">
+        <div class="srv" id="d1redis" style="color:var(--warn);border-color:#f59e0b35;background:rgba(245,158,11,.04)"
+          data-t="<div class='tt' style='color:var(--warn)'>🗄 Redis Cache Server (Dedicated)</div>Separate dedicated physical server<br>Redis Primary :6379 · Replica :6380 · Sentinel :26379<br>maxmemory: 8GB · allkeys-lru<br>Caches: SPL results · LLM responses · RAG context<div class='ts'>256GB RAM · 16 CPU · 1TB NVMe (separate server)</div>">
+          <div class="ss ok"></div><div class="si">🗄</div>
+          <div class="sn">Redis Server</div><div class="sd">Primary :6379<br>Sentinel :26379</div>
+        </div>
+        <div class="srv" id="d1pg" style="color:var(--teal);border-color:#14b8a635;background:rgba(20,184,166,.05)"
+          data-t="<div class='tt' style='color:var(--teal)'>🐘 PostgreSQL + pgvector</div>Dedicated physical server (separate from Redis)<br>PostgreSQL 16 · pgvector HNSW index<br>shared_buffers=32GB · work_mem=256MB<br>Stores: RAG knowledge · Episodic Memory · Baselines<div class='ts'>256GB RAM · 16 CPU · 1TB NVMe · PgBouncer :5433</div>">
+          <div class="ss ok"></div><div class="si">🐘</div>
+          <div class="sn">PostgreSQL+pgvec</div><div class="sd">128GB · HNSW<br>PgBouncer :5433</div>
+        </div>
+        <div class="srv" id="d1embed" style="color:var(--purple);border-color:#8b5cf635;background:rgba(139,92,246,.04)"
+          data-t="<div class='tt' style='color:var(--purple)'>📐 Embedding Service</div>Runs on PostgreSQL server (co-located)<br>FastAPI · all-MiniLM-L6-v2 (384 dims)<br>Converts text → vectors for pgvector<br>4 uvicorn workers · Redis caches embeddings 24h<div class='ts'>16GB RAM · 4 CPU · Port :8001</div>">
+          <div class="ss ok"></div><div class="si">📐</div>
+          <div class="sn">Embedding Svc</div><div class="sd">MiniLM-L6-v2<br>FastAPI :8001</div>
+        </div>
+        <div class="srv" id="d1splunk" style="color:var(--rh);border-color:#ee000040;background:rgba(238,0,0,.06)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔍 Splunk Enterprise — PRIMARY AGENT DATA STORE</div>62TB/day fully indexed<br>Metrics · Logs · Events · Traces · VM data<br>Agent SPL REST API :8089<br>Predefined SPL: compute_anomaly · network_disconnect<br>storage_saturation · security_violation · vm_migration_fail · patch_compliance<div class='ts'>3× Indexers: 256GB RAM · 16 CPU · 20TB SAS each · HEC :8088</div>">
+          <div class="ss ok"></div><div class="si">🔍</div>
+          <div class="sn">Splunk Cluster<br><span style="font-size:6.5px;background:var(--rh);color:#fff;padding:0 3px;border-radius:2px">62TB/DAY PRIMARY</span></div>
+          <div class="sd">3× Indexers<br>SPL :8089</div>
+        </div>
+        <div class="srv" id="d1ansible" style="color:var(--green);border-color:#10b98135;background:rgba(16,185,129,.04)"
+          data-t="<div class='tt' style='color:var(--green)'>⚡ Ansible AAP</div>Red Hat Ansible Automation Platform<br>Executes AI-generated Ansible playbooks<br>Tower API :443 triggered by HiTL Gate<br>SSH :22 to OCP worker nodes<div class='ts'>32GB RAM · 8 CPU</div>">
+          <div class="ss ok"></div><div class="si">⚡</div>
+          <div class="sn">Ansible AAP</div><div class="sd">Tower :443<br>SSH :22</div>
+        </div>
+        <div class="srv" id="d1vault" style="color:var(--warn);border-color:#f59e0b35;background:rgba(245,158,11,.04)"
+          data-t="<div class='tt' style='color:var(--warn)'>🏛 HashiCorp Vault</div>Secrets management HA cluster (3 nodes)<br>All agent credentials injected at runtime<br>Auto-unseal · Dynamic secrets · Audit log to Splunk<div class='ts'>FIPS 140-2 · Port :8200</div>">
+          <div class="ss ok"></div><div class="si">🏛</div>
+          <div class="sn">Vault Cluster</div><div class="sd">Secrets :8200<br>FIPS 140-2</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rep-row" id="d1rep">
+      <div class="dot" style="background:var(--passive);animation-duration:2s"></div>
+      <span style="color:var(--passive)">REPLICATING TO DC2</span>
+      <span style="color:var(--muted);margin-left:auto" id="replag">Lag: 1.1s</span>
+    </div>
+  </div><!-- /dc1 -->
+
+  <!-- CENTER LINK -->
+  <div class="clink">
+    <div class="cl-lbl" style="color:var(--active)">DARK FIBRE</div>
+    <div class="cl-wire" style="background:rgba(0,212,255,.15)"></div>
+    <div class="cl-info">
+      <div style="color:var(--active);font-weight:bold;margin-bottom:3px">MPLS 1</div>
+      <div>10Gbps Active</div>
+      <div>MACsec L2</div>
+      <div style="color:var(--muted)">Latency: 4ms</div>
+    </div>
+    <div class="cl-info" style="margin-top:4px">
+      <div style="color:var(--passive);font-weight:bold;margin-bottom:3px">MPLS 2</div>
+      <div>10Gbps Standby</div>
+      <div>IPSec VPN</div>
+      <div style="color:var(--muted)">Auto-failover</div>
+    </div>
+    <div class="cl-wire" style="background:rgba(0,255,136,.15)"></div>
+    <div class="cl-lbl" style="color:var(--passive)">DARK FIBRE</div>
+    <div style="margin-top:6px;padding:5px;background:rgba(0,0,0,.4);border:1px solid #1e3354;border-radius:4px;font-size:6.5px;color:var(--muted);text-align:center;line-height:1.6">
+      <div style="color:var(--passive);margin-bottom:2px;font-size:7px">REPLICATES</div>
+      Splunk indexes<br>PG WAL stream<br>pgvector data<br>Redis state<br>Vault secrets<br>OCP etcd<br>Git repos
+    </div>
+  </div>
+
+  <!-- DC2 PASSIVE -->
+  <div class="dcp dc2" id="dc2p">
+    <div class="dc-hdr">
+      <div>
+        <div class="dc-title" style="color:var(--passive)">🏢 DATA CENTER 2 — PUNE DR &nbsp;<span style="font-size:7px;background:rgba(238,0,0,.12);border:1px solid rgba(238,0,0,.3);color:#ff6060;padding:1px 6px;border-radius:3px;font-family:var(--raj);font-weight:600">🔒 TIER 3</span></div>
+        <div class="hb">
+          <div class="hb-bar">
+            <div class="hbt" style="background:var(--passive);height:5px;animation-delay:.1s"></div>
+            <div class="hbt" style="background:var(--passive);height:9px;animation-delay:.3s"></div>
+            <div class="hbt" style="background:var(--passive);height:4px;animation-delay:.5s"></div>
+            <div class="hbt" style="background:var(--passive);height:8px;animation-delay:.7s"></div>
+            <div class="hbt" style="background:var(--passive);height:5px;animation-delay:.9s"></div>
+            <div class="hbt" style="background:var(--passive);height:10px;animation-delay:1.1s"></div>
+          </div>
+          HEARTBEAT OK · STANDBY READY
+        </div>
+      </div>
+      <div class="dc-badge" id="d2badge" style="color:var(--passive);border-color:#00ff8835;background:rgba(0,255,136,.05)">◎ PASSIVE STANDBY</div>
+    </div>
+
+    <!-- PERIMETER DR -->
+    <div class="zone" style="border-color:#ee000022;background:rgba(238,0,0,.025)">
+      <div class="zt" style="color:var(--rh)"><div class="zd" style="background:var(--rh)"></div>PERIMETER SECURITY — DR</div>
+      <div class="sg">
+        <div class="srv" id="d2fw" style="color:var(--rh);border-color:#ee000030;background:rgba(238,0,0,.04)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔥 DR Firewall Cluster</div>Identical config to DC1 NGFW<br>Rules synced every 5 minutes<br>Activates within 30 seconds on failover<div class='ts'>Palo Alto PA-7000 · Same spec as DC1</div>">
+          <div class="ss rep"></div><div class="si">🔥</div>
+          <div class="sn">NGFW Standby</div><div class="sd">Config Sync'd<br>Hot standby</div>
+        </div>
+        <div class="srv" id="d2waf" style="color:var(--rh);border-color:#ee000030;background:rgba(238,0,0,.04)"
+          data-t="<div class='tt' style='color:var(--rh)'>🛡 DR WAF</div>F5 BIG-IP WAF standby<br>Policy sync every 5 minutes from DC1<div class='ts'>Same spec as DC1 · Hot standby</div>">
+          <div class="ss rep"></div><div class="si">🛡</div>
+          <div class="sn">WAF Standby</div><div class="sd">Policy Sync'd<br>Hot standby</div>
+        </div>
+        <div class="srv" id="d2lb" style="color:var(--passive);border-color:#00ff8830;background:rgba(0,255,136,.04)"
+          data-t="<div class='tt' style='color:var(--passive)'>⚖ DR Load Balancer</div>F5 BIG-IP LTM hot standby<br>GSLB — DNS failover when DC1 unreachable<div class='ts'>Same spec as DC1</div>">
+          <div class="ss rep"></div><div class="si">⚖</div>
+          <div class="sn">LB Standby</div><div class="sd">GSLB · DNS<br>Failover ready</div>
+        </div>
+        <div class="srv" id="d2bast" style="color:var(--warn);border-color:#f59e0b30;background:rgba(245,158,11,.04)"
+          data-t="<div class='tt' style='color:var(--warn)'>🔐 DR Bastion</div>Separate DR access path<br>Same PAM policies enforced<div class='ts'>CyberArk PAM · MFA enforced</div>">
+          <div class="ss ok"></div><div class="si">🔐</div>
+          <div class="sn">DR Bastion</div><div class="sd">CyberArk PAM<br>DR Access</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCP DR -->
+    <div class="zone" style="border-color:#00ff8820;background:rgba(0,255,136,.015)">
+      <div class="zt" style="color:var(--passive)"><div class="zd" style="background:var(--passive)"></div>RED HAT OPENSHIFT 4.20 — DR STANDBY CLUSTER</div>
+      <div class="sg">
+        <div class="srv" id="d2masters" style="color:var(--rh);border-color:#ee000030"
+          data-t="<div class='tt' style='color:var(--rh)'>🔴 DR Control Plane</div>3× Masters — etcd replicated from DC1<br>Runs read-mostly · Ready to take over &lt;5min<div class='ts'>Same spec as DC1 · etcd synced</div>">
+          <div class="ss rep"></div><div class="si">🔴</div>
+          <div class="sn">DR Control Plane</div><div class="sd">etcd Replicated<br>Ready &lt;5min</div>
+        </div>
+        <div class="srv" id="d2gpu" style="color:var(--purple);border-color:#8b5cf630"
+          data-t="<div class='tt' style='color:var(--purple)'>🧠 DR GPU Nodes</div>Granite 3.1 8B + Llama 3.1 8B pre-loaded<br>Models warm — no download delay on failover<div class='ts'>2× L40S 48GB VRAM · Pre-warmed</div>">
+          <div class="ss rep"></div><div class="si">🧠</div>
+          <div class="sn">DR GPU Nodes</div><div class="sd">Pre-warmed models<br>Instant ready</div>
+        </div>
+        <div class="srv" id="d2agents" style="color:#3b82f6;border-color:#3b82f630"
+          data-t="<div class='tt' style='color:#3b82f6'>🤖 DR Agent Workers</div>Agent pods scaled to zero in standby<br>Scale-up auto-triggered on failover<div class='ts'>4× Nodes · Scale 0→ready in 3min</div>">
+          <div class="ss rep"></div><div class="si">🤖</div>
+          <div class="sn">DR Agent Workers</div><div class="sd">Scaled 0 standby<br>Auto scale-up</div>
+        </div>
+        <div class="srv" id="d2kv" style="color:var(--passive);border-color:#00ff8828"
+          data-t="<div class='tt' style='color:var(--passive)'>🖥 DR KubeVirt Nodes</div>VM workload DR target<br>ODF MetroSync for storage<div class='ts'>4× Nodes · ODF Metro</div>">
+          <div class="ss rep"></div><div class="si">🖥</div>
+          <div class="sn">DR KubeVirt</div><div class="sd">VM DR target<br>ODF MetroSync</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OBSERVABILITY DR -->
+    <div class="zone" style="border-color:#ee000020;background:rgba(238,0,0,.02)">
+      <div class="zt" style="color:var(--rh)"><div class="zd" style="background:var(--rh)"></div>OBSERVABILITY — DR STANDBY</div>
+      <div class="sg">
+        <div class="srv" id="d2prom" style="color:var(--rh);border-color:#ee000028"
+          data-t="<div class='tt' style='color:var(--rh)'>📈 DR Prometheus</div>Federation mode — ready to become primary<div class='ts'>Same spec · Standby</div>">
+          <div class="ss rep"></div><div class="si">📈</div>
+          <div class="sn">Prometheus DR</div><div class="sd">Federation mode<br>Standby</div>
+        </div>
+        <div class="srv" id="d2otel" style="color:var(--active);border-color:#00d4ff28"
+          data-t="<div class='tt' style='color:var(--active)'>🔭 DR OTel Collector</div>Standby — activates on DC1 failure<br>Same pipeline config<div class='ts'>Ready to aggregate DC2 telemetry</div>">
+          <div class="ss rep"></div><div class="si">🔭</div>
+          <div class="sn">OTel DR</div><div class="sd">Standby aggregator<br>Ready</div>
+        </div>
+        <div class="srv" id="d2kafka" style="color:var(--warn);border-color:#f59e0b28"
+          data-t="<div class='tt' style='color:var(--warn)'>📡 DR Kafka</div>Kafka standby cluster<br>Mirrors DC1 Kafka topics<br>Activates on DC1 failure<div class='ts'>AMQ Streams DR · Mirror Maker 2</div>">
+          <div class="ss rep"></div><div class="si">📡</div>
+          <div class="sn">Kafka DR</div><div class="sd">Mirror Maker 2<br>Topics mirrored</div>
+        </div>
+        <div class="srv" id="d2alert" style="color:var(--rh);border-color:#ee000028"
+          data-t="<div class='tt' style='color:var(--rh)'>🔔 DR AlertManager</div>Standby alert routing<div class='ts'>Config replicated from DC1</div>">
+          <div class="ss rep"></div><div class="si">🔔</div>
+          <div class="sn">AlertMgr DR</div><div class="sd">Config sync'd<br>Standby</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLATFORM DR -->
+    <div class="zone" style="border-color:#14b8a618;background:rgba(20,184,166,.015)">
+      <div class="zt" style="color:var(--teal)"><div class="zd" style="background:var(--teal)"></div>OCP PLATFORM SERVICES — DR</div>
+      <div class="sg">
+        <div class="srv" id="d2argocd" style="color:var(--green);border-color:#10b98128"
+          data-t="<div class='tt' style='color:var(--green)'>🔄 DR ArgoCD</div>Watches same GitHub repo<br>Ready to sync manifests to DC2 OCP<div class='ts'>Standby · Same config</div>">
+          <div class="ss rep"></div><div class="si">🔄</div>
+          <div class="sn">ArgoCD DR</div><div class="sd">Same GitHub<br>Standby</div>
+        </div>
+        <div class="srv" id="d2keycloak" style="color:var(--rh);border-color:#ee000028"
+          data-t="<div class='tt' style='color:var(--rh)'>🔑 DR Keycloak</div>Read-only replica<br>Promotes to primary on DC1 failure<div class='ts'>Port :8443 · DR Replica</div>">
+          <div class="ss rep"></div><div class="si">🔑</div>
+          <div class="sn">Keycloak DR</div><div class="sd">Read replica<br>Auto-promote</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATA SERVICES DR -->
+    <div class="zone" style="border-color:#14b8a618;background:rgba(20,184,166,.015)">
+      <div class="zt" style="color:var(--teal)"><div class="zd" style="background:var(--teal)"></div>DATA SERVICES — DR PHYSICAL SERVERS</div>
+      <div class="sg">
+        <div class="srv" id="d2redis" style="color:var(--warn);border-color:#f59e0b28"
+          data-t="<div class='tt' style='color:var(--warn)'>🗄 DR Redis Server</div>Replica of DC1 Redis primary<br>Sentinel manages auto-promotion<br>Replication lag &lt;1s<div class='ts'>Same spec as DC1 · Auto-promote on failure</div>">
+          <div class="ss rep"></div><div class="si">🗄</div>
+          <div class="sn">Redis DR</div><div class="sd">Replica of DC1<br>Auto-promote</div>
+        </div>
+        <div class="srv" id="d2pg" style="color:var(--teal);border-color:#14b8a628"
+          data-t="<div class='tt' style='color:var(--teal)'>🐘 DR PostgreSQL + pgvector</div>WAL streaming from DC1<br>All pgvector embeddings replicated<br>Episodic Memory · Baselines · Audit<br>Lag &lt;5s · RPO &lt;5min<div class='ts'>Same spec as DC1 · Streaming replication</div>">
+          <div class="ss rep"></div><div class="si">🐘</div>
+          <div class="sn">PG+pgvec DR</div><div class="sd">WAL Streaming<br>Lag &lt;5s</div>
+        </div>
+        <div class="srv" id="d2embed" style="color:var(--purple);border-color:#8b5cf628"
+          data-t="<div class='tt' style='color:var(--purple)'>📐 DR Embedding Service</div>Pre-loaded model — instant activate<div class='ts'>Same spec as DC1</div>">
+          <div class="ss rep"></div><div class="si">📐</div>
+          <div class="sn">Embedding DR</div><div class="sd">Model pre-loaded<br>Instant ready</div>
+        </div>
+        <div class="srv" id="d2splunk" style="color:var(--rh);border-color:#ee000035;background:rgba(238,0,0,.05)"
+          data-t="<div class='tt' style='color:var(--rh)'>🔍 DR Splunk Cluster</div>Indexer Cluster replication factor: 2<br>All 62TB/day data replicated<br>Agents can query DR Splunk :8089<div class='ts'>3× Indexers · Same spec · RF:2</div>">
+          <div class="ss rep"></div><div class="si">🔍</div>
+          <div class="sn">Splunk DR</div><div class="sd">RF:2 Replicated<br>:8089 ready</div>
+        </div>
+        <div class="srv" id="d2ansible" style="color:var(--green);border-color:#10b98128"
+          data-t="<div class='tt' style='color:var(--green)'>⚡ DR Ansible AAP</div>Same job templates as DC1<br>Activates on DC1 failure<div class='ts'>Standby instance</div>">
+          <div class="ss rep"></div><div class="si">⚡</div>
+          <div class="sn">Ansible DR</div><div class="sd">Same templates<br>Standby</div>
+        </div>
+        <div class="srv" id="d2vault" style="color:var(--warn);border-color:#f59e0b28"
+          data-t="<div class='tt' style='color:var(--warn)'>🏛 DR Vault</div>Vault DR replication<br>All secrets replicated<br>Auto-promotes to primary<div class='ts'>DR Replication · FIPS 140-2</div>">
+          <div class="ss rep"></div><div class="si">🏛</div>
+          <div class="sn">Vault DR</div><div class="sd">DR Replication<br>Auto-promote</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rep-row">
+      <div class="dot" style="background:var(--passive);animation-duration:2s"></div>
+      <span style="color:var(--passive)">RECEIVING FROM DC1</span>
+      <span style="color:var(--muted);margin-left:auto">RPO: &lt;5min</span>
+    </div>
+  </div><!-- /dc2 -->
+</div><!-- /main -->
+
+<div id="legend">
+  <span class="ll" style="margin-right:6px">FLOWS:</span>
+  <div class="li"><div class="ll2" style="background:var(--rh);height:3px"></div>OCP Telemetry→Splunk</div>
+  <div class="li"><div class="ll2" style="background:var(--warn)"></div>Kafka transport</div>
+  <div class="li"><div class="ll2" style="background:var(--active)"></div>Agent SPL query</div>
+  <div class="li"><div class="ll2" style="background:var(--purple)"></div>LLM inference</div>
+  <div class="li"><div class="ll2" style="background:var(--teal)"></div>RAG / pgvector</div>
+  <div class="li"><div class="ll2" style="background:var(--green)"></div>Remediation</div>
+  <div class="li"><div class="ll2" style="background:var(--passive)"></div>DC Replication</div>
+  <div style="margin-left:auto;font-size:7.5px;color:var(--muted)">RTO&lt;15m · RPO&lt;5m · FIPS140-2 · ISO27001 · SOC2 TYPE II</div>
+</div>
+
+<div id="simp">
+  <h4>⚡ SYSTEM METRICS</h4>
+  <div class="sm"><span class="sl">DC1 Status</span><span class="sv" id="mdc1" style="color:var(--active)">ACTIVE</span></div>
+  <div class="sm"><span class="sl">DC2 Status</span><span class="sv" id="mdc2" style="color:var(--passive)">PASSIVE</span></div>
+  <div class="sm"><span class="sl">Active flows</span><span class="sv" id="mflows" style="color:var(--active)">0</span></div>
+  <div class="sm"><span class="sl">OCP Events/sec</span><span class="sv" id="mev" style="color:var(--rh)">18</span></div>
+  <div class="sm"><span class="sl">Kafka msgs/sec</span><span class="sv" id="mkaf" style="color:var(--warn)">542</span></div>
+  <div class="sm"><span class="sl">LLM tokens/min</span><span class="sv" id="mtok" style="color:var(--purple)">6,840</span></div>
+  <div class="sm"><span class="sl">Active agents</span><span class="sv" id="mag" style="color:var(--active)">4</span></div>
+  <div class="sm"><span class="sl">Remediations</span><span class="sv" id="mrem" style="color:var(--green)">73</span></div>
+  <div class="sm"><span class="sl">Rep lag</span><span class="sv" id="mlag">1.1s</span></div>
+  <div class="sm"><span class="sl">Simulation</span><span class="sv" id="msim" style="color:var(--muted)">IDLE</span></div>
+</div>
+
+<script>
+// ── CANVAS ─────────────────────────────────────
+const canvas = document.getElementById('fc');
+const ctx = canvas.getContext('2d');
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+resize(); window.addEventListener('resize',()=>{ resize(); setTimeout(rebuildFlows,200); });
+
+// ── TOOLTIP ────────────────────────────────────
+const tip = document.getElementById('tip');
+function showTip(e,h){ tip.innerHTML=h; tip.style.opacity='1'; mvTip(e); }
+function hideTip(){ tip.style.opacity='0'; }
+function mvTip(e){
+  const x=Math.min(e.clientX+14,window.innerWidth-290);
+  const y=Math.min(e.clientY+14,window.innerHeight-200);
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+window.addEventListener('mousemove',e=>{ if(tip.style.opacity==='1') mvTip(e); });
+document.querySelectorAll('[data-t]').forEach(el=>{
+  el.addEventListener('mouseover',e=>showTip(e,el.getAttribute('data-t')));
+  el.addEventListener('mouseout',hideTip);
+});
+
+// ── HELPERS ─────────────────────────────────────
+function hr(hex,a){
+  const c=hex.replace(/^#/,'').slice(0,6);
+  return `rgba(${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)},${a})`;
+}
+function sh(c){ return '#'+c.replace(/^#/,'').slice(0,6); }
+function gc(id){
+  const el=document.getElementById(id); if(!el) return null;
+  const r=el.getBoundingClientRect();
+  return {x:r.left+r.width/2, y:r.top+r.height/2, w:r.width, h:r.height};
+}
+function bp(fx,fy,tx,ty,t){
+  const cx=(fx+tx)/2+(fy-ty)*0.2, cy=(fy+ty)/2-(fx-tx)*0.2;
+  return {x:(1-t)*(1-t)*fx+2*(1-t)*t*cx+t*t*tx, y:(1-t)*(1-t)*fy+2*(1-t)*t*cy+t*t*ty};
+}
+function blen(fx,fy,tx,ty,n=50){
+  let l=0,p=bp(fx,fy,tx,ty,0);
+  for(let i=1;i<=n;i++){const q=bp(fx,fy,tx,ty,i/n);l+=Math.hypot(q.x-p.x,q.y-p.y);p=q;}
+  return l;
+}
+
+// ── FLOW LINE REGISTRY ──────────────────────────
+const flows = [];
+let tick = 0, lastT = performance.now();
+
+function addFlow(from, to, color, opts={}){
+  const c = sh(color);
+  // Remove duplicates
+  const i = flows.findIndex(f=>f.from===from&&f.to===to);
+  if(i>=0) flows.splice(i,1);
+  flows.push({
+    from, to, color:c,
+    w:      opts.w||2,
+    speed:  opts.speed||0.5,
+    dlen:   opts.dlen||16,
+    glen:   opts.glen||12,
+    glow:   opts.glow||6,
+    pulses: opts.pulses||1,
+    off:    Math.random()*80,
+    label:  opts.label||'',
+    active: true,
+    tmp:    opts.tmp||false,
+    born:   performance.now()/1000,
+    ttl:    opts.ttl||999,
+  });
+}
+
+function rmFlow(from,to){
+  const i=flows.findIndex(f=>f.from===from&&f.to===to); if(i>=0) flows.splice(i,1);
+}
+function setActive(from,to,v){
+  const f=flows.find(f=>f.from===from&&f.to===to); if(f) f.active=v;
+}
+// temp pulse — single shot flow line
+function pulse(from, to, color, opts={}){
+  const c=sh(color);
+  flows.push({from,to,color:c,w:opts.w||2.5,speed:opts.speed||0.9,
+    dlen:opts.dlen||20,glen:opts.glen||10,glow:opts.glow||8,
+    pulses:opts.pulses||2,off:Math.random()*40,label:opts.label||'',
+    active:true,tmp:true,born:performance.now()/1000,ttl:opts.ttl||3});
+}
+
+// ── DRAW ────────────────────────────────────────
+function draw(now){
+  const dt=Math.min((now-lastT)/1000,0.08); lastT=now; tick+=dt;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const nowS=now/1000;
+  // expire temp flows
+  for(let i=flows.length-1;i>=0;i--){
+    if(flows[i].tmp && nowS-flows[i].born > flows[i].ttl) flows.splice(i,1);
+  }
+  document.getElementById('mflows').textContent = flows.filter(f=>f.active).length;
+
+  flows.forEach(fl=>{
+    const F=gc(fl.from), T=gc(fl.to); if(!F||!T) return;
+    const fx=F.x,fy=F.y,tx=T.x,ty=T.y;
+    const cx=(fx+tx)/2+(fy-ty)*0.2, cy=(fy+ty)/2-(fx-tx)*0.2;
+
+    // Base track line
+    ctx.beginPath(); ctx.moveTo(fx,fy);
+    ctx.quadraticCurveTo(cx,cy,tx,ty);
+    ctx.strokeStyle=hr(fl.color, fl.active?0.2:0.07);
+    ctx.lineWidth=fl.active?fl.w*0.5:0.8;
+    ctx.setLineDash([]); ctx.shadowBlur=0; ctx.stroke();
+
+    if(!fl.active) return;
+
+    const pathLen=blen(fx,fy,tx,ty);
+    const cell=fl.dlen+fl.glen;
+    const steps=70;
+
+    for(let p=0;p<fl.pulses;p++){
+      const phOff=(p/fl.pulses)*cell;
+      const trav=(tick*fl.speed*75+fl.off+phOff)%pathLen;
+
+      // Build dash segments
+      let acc=0, prev=bp(fx,fy,tx,ty,0);
+      let segs=[]; // [{x1,y1,x2,y2}]
+      let inDash=false, segStart=null;
+
+      for(let s=1;s<=steps;s++){
+        const pt=bp(fx,fy,tx,ty,s/steps);
+        const segL=Math.hypot(pt.x-prev.x,pt.y-prev.y);
+        // position in the repeating dash pattern relative to pulse head
+        const rel=(acc - trav%pathLen + pathLen*2)%cell;
+        const inside = rel < fl.dlen;
+
+        if(inside && !inDash){ inDash=true; segStart={...prev}; }
+        if(!inside && inDash){ inDash=false; segs.push({x1:segStart.x,y1:segStart.y,x2:prev.x,y2:prev.y}); }
+
+        acc+=segL; prev={...pt};
+      }
+      if(inDash && segStart) segs.push({x1:segStart.x,y1:segStart.y,x2:prev.x,y2:prev.y});
+
+      // Draw glow pass
+      ctx.shadowColor=fl.color; ctx.shadowBlur=fl.glow;
+      ctx.strokeStyle=hr(fl.color,0.95); ctx.lineWidth=fl.w;
+      ctx.setLineDash([]);
+      segs.forEach(s=>{
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      });
+
+      // Draw bright core
+      ctx.shadowBlur=0;
+      ctx.strokeStyle=hr('#ffffff',0.7); ctx.lineWidth=Math.max(0.8,fl.w*0.35);
+      segs.forEach(s=>{
+        ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+      });
+    }
+
+    // Arrowhead
+    const p1=bp(fx,fy,tx,ty,0.94), p2=bp(fx,fy,tx,ty,1.0);
+    const ang=Math.atan2(p2.y-p1.y,p2.x-p1.x), as=fl.w*2.5+3;
+    ctx.beginPath();
+    ctx.moveTo(tx,ty);
+    ctx.lineTo(tx-as*Math.cos(ang-0.42),ty-as*Math.sin(ang-0.42));
+    ctx.lineTo(tx-as*Math.cos(ang+0.42),ty-as*Math.sin(ang+0.42));
+    ctx.closePath();
+    ctx.fillStyle=fl.color; ctx.shadowColor=fl.color; ctx.shadowBlur=8; ctx.fill();
+    ctx.shadowBlur=0;
+
+    // Label
+    if(fl.label){
+      const m=bp(fx,fy,tx,ty,0.5);
+      ctx.font='8px Share Tech Mono,monospace';
+      ctx.textAlign='center';
+      ctx.shadowColor=fl.color; ctx.shadowBlur=5;
+      ctx.fillStyle=hr(fl.color,0.9);
+      ctx.fillText(fl.label,m.x,m.y-9); ctx.shadowBlur=0;
+    }
+  });
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ── ALWAYS-ON BASE FLOWS ─────────────────────────
+function initFlows(){
+  // === OCP TELEMETRY PIPELINE ===
+  // Prometheus → OTel Collector
+  addFlow('d1prom','d1otel','#ee0000',{w:2,speed:.7,dlen:14,glen:10,glow:7,pulses:2,label:'remote_write :9090'});
+  // AlertManager → OTel
+  addFlow('d1alert','d1otel','#ee0000',{w:1.5,speed:.6,dlen:12,glen:12,glow:5,pulses:1,label:'webhook :4317'});
+  // AlertManager → Splunk (direct fast path)
+  addFlow('d1alert','d1splunk','#ee0000',{w:1.5,speed:.8,dlen:10,glen:14,glow:5,pulses:1,label:'HEC :8088 direct'});
+  // KubeVirt → OTel
+  addFlow('d1kv','d1otel','#ee0000',{w:2,speed:.75,dlen:16,glen:9,glow:7,pulses:2,label:'VM events :4317'});
+  // OTel → Splunk (PRIMARY — thick, fast, many pulses)
+  addFlow('d1otel','d1splunk','#ee0000',{w:4,speed:1.0,dlen:22,glen:7,glow:12,pulses:4,label:'HEC :8088 · 62TB/day'});
+  // OTel → Kafka (secondary filtered)
+  addFlow('d1otel','d1kafka','#f59e0b',{w:1.5,speed:.55,dlen:10,glen:16,glow:4,pulses:1,label:'Kafka :9092 filtered'});
+  // Kafka → Splunk via Kafka Connect
+  addFlow('d1kafka','d1splunk','#f59e0b',{w:1.5,speed:.6,dlen:12,glen:14,glow:4,pulses:1,label:'Kafka Connect HEC'});
+  // OTel → Tempo (traces)
+  addFlow('d1otel','d1tempo','#8b5cf6',{w:1.5,speed:.4,dlen:10,glen:18,glow:4,pulses:1,label:'traces :4317'});
+  // Prometheus → Grafana
+  addFlow('d1prom','d1grafana','#f59e0b',{w:1,speed:.35,dlen:8,glen:18,glow:3,pulses:1});
+  // Tempo → Grafana
+  addFlow('d1tempo','d1grafana','#8b5cf6',{w:1,speed:.3,dlen:7,glen:18,glow:3,pulses:1});
+
+  // === AGENT FLOWS ===
+  // Agents → Splunk (SPL query)
+  addFlow('d1agents','d1splunk','#f59e0b',{w:1.5,speed:.6,dlen:12,glen:15,glow:5,pulses:1,label:'SPL :8089'});
+  // Splunk → Agents (SPL results)
+  addFlow('d1splunk','d1agents','#ee0000',{w:2.5,speed:.65,dlen:18,glen:11,glow:8,pulses:2,label:'SPL results'});
+  // Agents → GPU (LLM inference)
+  addFlow('d1agents','d1gpu','#8b5cf6',{w:2,speed:.5,dlen:14,glen:14,glow:6,pulses:1,label:'LLM :8000'});
+  // GPU → Agents (response)
+  addFlow('d1gpu','d1agents','#8b5cf6',{w:1.5,speed:.45,dlen:11,glen:16,glow:5,pulses:1});
+  // Agents → pgvector (RAG)
+  addFlow('d1agents','d1pg','#14b8a6',{w:1.5,speed:.48,dlen:12,glen:15,glow:5,pulses:1,label:'RAG :5433'});
+  // pgvector → Agents
+  addFlow('d1pg','d1agents','#14b8a6',{w:1.5,speed:.44,dlen:10,glen:16,glow:4,pulses:1});
+  // Agents → Redis (cache)
+  addFlow('d1agents','d1redis','#f59e0b',{w:1,speed:.7,dlen:8,glen:10,glow:3,pulses:1,label:'cache :6379'});
+  // Agents → Embed service
+  addFlow('d1agents','d1embed','#8b5cf6',{w:1,speed:.4,dlen:8,glen:18,glow:3,pulses:1,label:'embed :8001'});
+  // Embed → pgvector
+  addFlow('d1embed','d1pg','#8b5cf6',{w:1,speed:.35,dlen:7,glen:18,glow:3,pulses:1});
+  // Agents → Vault (secrets)
+  addFlow('d1vault','d1agents','#f59e0b',{w:1,speed:.3,dlen:8,glen:20,glow:3,pulses:1,label:'secrets :8200'});
+
+  // === REMEDIATION FLOWS ===
+  // ArgoCD → KubeVirt
+  addFlow('d1argocd','d1kv','#10b981',{w:1.5,speed:.4,dlen:12,glen:18,glow:4,pulses:1,label:'k8s sync :6443'});
+  // Ansible → KubeVirt
+  addFlow('d1ansible','d1kv','#10b981',{w:1.5,speed:.38,dlen:11,glen:18,glow:4,pulses:1,label:'SSH :22'});
+  // Agents → Ansible (trigger)
+  addFlow('d1agents','d1ansible','#10b981',{w:1.5,speed:.4,dlen:12,glen:16,glow:4,pulses:1,label:'Tower API :443'});
+  // Agents → ArgoCD
+  addFlow('d1agents','d1argocd','#10b981',{w:1.5,speed:.4,dlen:12,glen:16,glow:4,pulses:1});
+
+  // === SECURITY / NETWORK ===
+  addFlow('d1fw','d1waf','#ee0000',{w:1.5,speed:.5,dlen:10,glen:14,glow:4,pulses:1});
+  addFlow('d1waf','d1lb','#00d4ff',{w:1.5,speed:.5,dlen:10,glen:14,glow:4,pulses:1});
+  addFlow('d1lb','d1masters','#00d4ff',{w:1.5,speed:.5,dlen:11,glen:13,glow:4,pulses:1,label:'Ingress :443'});
+
+  // === DC1 → DC2 REPLICATION ===
+  addFlow('d1splunk','d2splunk','#00ff88',{w:2,speed:.35,dlen:14,glen:20,glow:5,pulses:2,label:'Index replication RF:2'});
+  addFlow('d1pg','d2pg','#00ff88',{w:1.5,speed:.3,dlen:10,glen:18,glow:4,pulses:1,label:'WAL streaming'});
+  addFlow('d1redis','d2redis','#00ff88',{w:1,speed:.4,dlen:8,glen:16,glow:3,pulses:1});
+  addFlow('d1vault','d2vault','#f59e0b',{w:1,speed:.25,dlen:8,glen:22,glow:3,pulses:1});
+  addFlow('d1kafka','d2kafka','#f59e0b',{w:1,speed:.32,dlen:8,glen:18,glow:3,pulses:1,label:'Mirror Maker 2'});
+  addFlow('d1otel','d2otel','#00ff88',{w:1,speed:.28,dlen:7,glen:20,glow:3,pulses:1});
+}
+
+function rebuildFlows(){ flows.length=0; setTimeout(initFlows,100); }
+setTimeout(initFlows, 700);
+
+// ── LOG ─────────────────────────────────────────
+function log(msg,color='#00d4ff'){
+  const c=document.getElementById('les');
+  const e=document.createElement('div');
+  e.className='le'; e.style.color=color;
+  e.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`;
+  c.prepend(e);
+  while(c.children.length>5) c.removeChild(c.lastChild);
+}
+
+// ── LIVE METRICS ─────────────────────────────────
+let rc=73;
+setInterval(()=>{
+  document.getElementById('mev').textContent=Math.floor(Math.random()*16)+12;
+  document.getElementById('mkaf').textContent=Math.floor(Math.random()*400)+340;
+  document.getElementById('mtok').textContent=(Math.floor(Math.random()*5000)+4200).toLocaleString();
+  document.getElementById('mag').textContent=Math.floor(Math.random()*3)+3;
+  document.getElementById('mlag').textContent=(Math.random()*2+.5).toFixed(1)+'s';
+  document.getElementById('replag').textContent='Lag: '+(Math.random()*2+.5).toFixed(1)+'s';
+  if(Math.random()>.6){rc++;document.getElementById('mrem').textContent=rc;}
+},2500);
+
+// ── SIMULATIONS ──────────────────────────────────
+let simBusy=false;
+function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// Temporarily boost a flow line
+function boost(from,to,opts={}){
+  const f=flows.find(fl=>fl.from===from&&fl.to===to);
+  if(!f) return;
+  const orig={w:f.w,speed:f.speed,dlen:f.dlen,glen:f.glen,glow:f.glow,pulses:f.pulses};
+  Object.assign(f,opts);
+  setTimeout(()=>Object.assign(f,orig), opts.dur||3000);
+}
+
+function simFlow(){
+  document.getElementById('msim').textContent='LIVE FLOW';
+  document.getElementById('msim').style.color='var(--active)';
+  log('Boosting all telemetry flows — OCP→OTel→Kafka→Splunk','#00d4ff');
+
+  // Boost telemetry pipeline
+  boost('d1prom','d1otel',  {w:3,speed:1.3,dlen:20,glen:6,glow:12,pulses:4,dur:8000});
+  boost('d1kv','d1otel',    {w:3,speed:1.4,dlen:20,glen:5,glow:12,pulses:4,dur:8000});
+  boost('d1alert','d1otel', {w:2.5,speed:1.2,dlen:18,glen:7,glow:10,pulses:3,dur:8000});
+  boost('d1otel','d1splunk',{w:6,speed:1.5,dlen:26,glen:5,glow:16,pulses:6,dur:8000});
+  boost('d1otel','d1kafka', {w:2.5,speed:1.0,dlen:16,glen:8,glow:7,pulses:3,dur:8000});
+  boost('d1kafka','d1splunk',{w:2.5,speed:1.0,dlen:16,glen:9,glow:6,pulses:2,dur:8000});
+
+  setTimeout(()=>{
+    log('DC1→DC2 replication streams active','#00ff88');
+    boost('d1splunk','d2splunk',{w:3,speed:.7,dlen:18,glen:12,glow:8,pulses:3,dur:6000});
+    boost('d1pg','d2pg',        {w:2.5,speed:.6,dlen:14,glen:14,glow:6,pulses:2,dur:6000});
+    boost('d1kafka','d2kafka',  {w:2,speed:.6,dlen:12,glen:14,glow:5,pulses:2,dur:6000});
+  },2000);
+
+  setTimeout(()=>{
+    document.getElementById('msim').textContent='IDLE';
+    document.getElementById('msim').style.color='var(--muted)';
+  },9000);
+}
+
+function simSPL(){
+  document.getElementById('msim').textContent='SPL QUERY';
+  document.getElementById('msim').style.color='var(--warn)';
+  log('Network Agent: executing network_disconnect.spl → Splunk :8089','#f59e0b');
+
+  // Check Redis cache first
+  pulse('d1agents','d1redis','#f59e0b',{w:2,speed:1.2,dlen:14,glen:8,glow:6,pulses:2,ttl:2,label:'cache check'});
+
+  setTimeout(()=>{
+    log('Cache miss — executing live SPL query against Splunk','#f59e0b');
+    // Agents → Splunk (query)
+    boost('d1agents','d1splunk',{w:3,speed:1.2,dlen:18,glen:8,glow:10,pulses:3,dur:2500});
+
+    setTimeout(()=>{
+      log('SPL result: VM kubevirt-prod-42 · 847 OVS flow drops · 3 disconnects/hr','#ee0000');
+      // Splunk → Agents (results)
+      boost('d1splunk','d1agents',{w:4,speed:1.1,dlen:20,glen:7,glow:12,pulses:4,dur:2500});
+
+      setTimeout(()=>{
+        log('Network Agent → Vector DB: RAG context query','#14b8a6');
+        boost('d1agents','d1pg',{w:2.5,speed:1.0,dlen:16,glen:9,glow:7,pulses:2,dur:2000});
+        setTimeout(()=>{
+          boost('d1pg','d1agents',{w:2.5,speed:.9,dlen:14,glen:10,glow:7,pulses:2,dur:2000});
+          log('RAG: runbook match 94% · past incident CHG0089201 found','#14b8a6');
+          document.getElementById('msim').textContent='SPL DONE';
+        },1500);
+      },1800);
+    },1800);
+  },1000);
+}
+
+function simLLM(){
+  document.getElementById('msim').textContent='LLM CALL';
+  document.getElementById('msim').style.color='var(--purple)';
+  log('Agent → LLM Gateway: Granite 3.1 8B inference call :8000','#8b5cf6');
+
+  boost('d1agents','d1gpu',{w:3,speed:1.0,dlen:18,glen:8,glow:10,pulses:3,dur:3500});
+
+  setTimeout(()=>{
+    log('LLM processing: SPL results + RAG context + Confluence runbook','#8b5cf6');
+    setTimeout(()=>{
+      boost('d1gpu','d1agents',{w:3,speed:.9,dlen:16,glen:9,glow:10,pulses:3,dur:3000});
+      log('✅ LLM response: Ansible YAML generated · Confidence: 94% · Risk: MEDIUM','#00ff88');
+      document.getElementById('mtok').textContent='7,840';
+      document.getElementById('msim').textContent='LLM DONE';
+    },2500);
+  },1500);
+}
+
+async function simRemediation(){
+  if(simBusy) return; simBusy=true;
+  document.getElementById('msim').textContent='REMEDIATION';
+  document.getElementById('msim').style.color='var(--green)';
+
+  log('🔴 ALERT: KubeVirt VM network disconnect — worker-node-3','#ee0000');
+
+  // Phase 1 — Telemetry
+  await wait(400);
+  boost('d1kv','d1otel',{w:4,speed:1.4,dlen:20,glen:6,glow:12,pulses:4,dur:2000});
+  log('OTel Collector: VM event + OVS flow drops ingested','#ee0000');
+
+  await wait(700);
+  boost('d1otel','d1splunk',{w:6,speed:1.5,dlen:24,glen:5,glow:16,pulses:5,dur:2500});
+  log('OTel → Splunk HEC :8088 — telemetry indexed','#ee0000');
+
+  await wait(800);
+  boost('d1otel','d1kafka',{w:3,speed:1.1,dlen:16,glen:8,glow:8,pulses:3,dur:2000});
+  boost('d1kafka','d1splunk',{w:2.5,speed:1.0,dlen:14,glen:9,glow:6,pulses:2,dur:2000});
+  log('Kafka: filtered alert event routed to Splunk','#f59e0b');
+
+  // Phase 2 — Agent SPL
+  await wait(1200);
+  boost('d1agents','d1splunk',{w:3,speed:1.2,dlen:18,glen:8,glow:10,pulses:3,dur:2000});
+  log('Network Agent: executing network_disconnect.spl → Splunk :8089','#f59e0b');
+
+  await wait(1500);
+  boost('d1splunk','d1agents',{w:4,speed:1.1,dlen:20,glen:7,glow:12,pulses:4,dur:2000});
+  log('SPL results: OVS drops=847 · vm=kubevirt-prod-42 · node=worker-node-3','#ee0000');
+
+  // Phase 3 — RAG
+  await wait(1200);
+  boost('d1agents','d1pg',{w:2.5,speed:1.0,dlen:16,glen:9,glow:7,pulses:2,dur:2000});
+  log('Agent → pgvector: RAG context query','#14b8a6');
+
+  await wait(1200);
+  boost('d1pg','d1agents',{w:2.5,speed:.9,dlen:14,glen:10,glow:7,pulses:2,dur:2000});
+  log('RAG: OVN runbook 94% match · past fix CHG0089201 found in episodic memory','#14b8a6');
+
+  // Phase 4 — Vault secrets
+  await wait(800);
+  pulse('d1vault','d1agents','#f59e0b',{w:1.5,speed:1.0,dlen:12,glen:10,glow:5,pulses:2,ttl:2,label:'Splunk+GH tokens'});
+  log('Vault: GitHub PAT + ServiceNow token injected at runtime','#f59e0b');
+
+  // Phase 5 — LLM
+  await wait(1000);
+  boost('d1agents','d1gpu',{w:4,speed:1.0,dlen:20,glen:7,glow:12,pulses:4,dur:4000});
+  log('LLM Gateway: Granite 3.1 8B generating Ansible + ArgoCD YAML…','#8b5cf6');
+
+  await wait(3000);
+  boost('d1gpu','d1agents',{w:3,speed:.9,dlen:16,glen:9,glow:10,pulses:3,dur:2500});
+  log('✅ Ansible YAML generated · ArgoCD AppSet ready · Confidence: 94%','#00ff88');
+
+  // Phase 6 — Playbook → GitHub + ServiceNow
+  await wait(1200);
+  log('Playbook Generator → GitHub PR + ServiceNow CHG0089412 (simultaneous)','#10b981');
+
+  // Phase 7 — Human approval
+  await wait(1500);
+  log('⏳ HiTL Gate: awaiting CHG0089412 approval in ServiceNow / MS Teams','#eab308');
+  await wait(2500);
+  log('✅ HUMAN APPROVED: CHG0089412 — Onkar, Platform Engineering','#00ff88');
+
+  // Phase 8 — ArgoCD + Ansible
+  await wait(500);
+  boost('d1agents','d1argocd',{w:3,speed:1.0,dlen:16,glen:8,glow:8,pulses:3,dur:3000});
+  boost('d1agents','d1ansible',{w:3,speed:1.0,dlen:16,glen:8,glow:8,pulses:3,dur:3000});
+  log('ArgoCD sync triggered · Ansible AAP job launched simultaneously','#10b981');
+
+  await wait(1800);
+  boost('d1argocd','d1kv',{w:3,speed:.9,dlen:16,glen:9,glow:8,pulses:3,dur:3000});
+  boost('d1ansible','d1kv',{w:3,speed:.8,dlen:14,glen:10,glow:8,pulses:2,dur:3000});
+  log('ArgoCD: NetworkPolicy manifest applied · Ansible: OVS fix playbook executing','#10b981');
+
+  await wait(2500);
+  boost('d1kv','d1otel',{w:4,speed:1.3,dlen:18,glen:7,glow:10,pulses:4,dur:2500});
+  boost('d1otel','d1splunk',{w:5,speed:1.2,dlen:22,glen:6,glow:14,pulses:5,dur:2500});
+  log('🟢 VM kubevirt-prod-42 network RESTORED · Prometheus metrics normalising','#00ff88');
+  log('Episodic memory updated · INC0049231 closed · Loop closed ① Total: 14min','#14b8a6');
+
+  rc++; document.getElementById('mrem').textContent=rc;
+  document.getElementById('msim').textContent='COMPLETE';
+  simBusy=false;
+}
+
+function simDC1Fail(){
+  log('🚨 DC1 CATASTROPHIC FAILURE DETECTED','#ee0000');
+  document.getElementById('msim').textContent='DC1 FAILED';
+  document.getElementById('msim').style.color='var(--rh)';
+  document.getElementById('fov').style.display='block';
+  document.getElementById('mdc1').textContent='FAILED';
+  document.getElementById('mdc1').style.color='var(--rh)';
+
+  ['d1masters','d1gpu','d1agents','d1kv','d1prom','d1alert','d1otel','d1kafka',
+   'd1tempo','d1grafana','d1splunk','d1ansible'].forEach(id=>{
+    const e=document.getElementById(id); if(!e) return;
+    e.classList.add('off');
+    const s=e.querySelector('.ss'); if(s) s.className='ss off-dot';
+  });
+
+  // Kill DC1→DC2 flows
+  ['d1otel','d1prom','d1kv','d1alert','d1kafka'].forEach(from=>{
+    setActive(from,'d1splunk',false);
+    setActive(from,'d2splunk',false);
+  });
+  setActive('d1splunk','d2splunk',false);
+  setActive('d1pg','d2pg',false);
+  setActive('d1redis','d2redis',false);
+
+  document.getElementById('d1rep').style.opacity='.3';
+
+  setTimeout(()=>{
+    log('DNS GSLB switching traffic to DC2','#f59e0b');
+    log('Redis Sentinel promoting DC2 to primary','#f59e0b');
+    log('PostgreSQL DR promoting to read-write mode','#f59e0b');
+    log('Vault DR cluster promoting to active','#f59e0b');
+  },1500);
+}
+
+function simFailover(){
+  log('🔄 FAILOVER SEQUENCE — DC2 becoming ACTIVE PRIMARY','#00ff88');
+  document.getElementById('msim').textContent='FAILOVER';
+  document.getElementById('msim').style.color='var(--passive)';
+  document.getElementById('fov').style.display='none';
+  document.getElementById('mdc2').textContent='ACTIVE';
+  document.getElementById('mdc2').style.color='var(--passive)';
+
+  const b=document.getElementById('d2badge');
+  b.textContent='● ACTIVE PRIMARY'; b.style.color='var(--passive)';
+  b.style.background='rgba(0,255,136,.08)';
+
+  document.getElementById('p-dc2').innerHTML=
+    '<div class="dot" style="background:var(--passive)"></div>DC2 ACTIVE';
+
+  ['d2masters','d2gpu','d2agents','d2kv','d2prom',
+   'd2otel','d2kafka','d2alert'].forEach((id,i)=>{
+    setTimeout(()=>{
+      const e=document.getElementById(id); if(!e) return;
+      e.classList.remove('off');
+      const s=e.querySelector('.ss'); if(s) s.className='ss ok';
+      log(`DC2 ${e.querySelector('.sn').textContent.trim()} ONLINE`,'#00ff88');
+    },i*350);
+  });
+
+  // Add DC2 flows
+  setTimeout(()=>{
+    addFlow('d2kv','d2otel','#ee0000',{w:2,speed:.8,dlen:16,glen:9,glow:7,pulses:2});
+    addFlow('d2prom','d2otel','#ee0000',{w:1.5,speed:.7,dlen:12,glen:10,glow:5,pulses:1});
+    addFlow('d2otel','d2splunk','#ee0000',{w:4,speed:1.0,dlen:22,glen:7,glow:12,pulses:4,label:'HEC :8088 62TB/day'});
+    addFlow('d2otel','d2kafka','#f59e0b',{w:1.5,speed:.55,dlen:10,glen:16,glow:4,pulses:1});
+    addFlow('d2kafka','d2splunk','#f59e0b',{w:1.5,speed:.6,dlen:12,glen:14,glow:4,pulses:1});
+    addFlow('d2agents','d2splunk','#f59e0b',{w:1.5,speed:.6,dlen:12,glen:15,glow:5,pulses:1});
+    addFlow('d2splunk','d2agents','#ee0000',{w:2.5,speed:.65,dlen:18,glen:11,glow:8,pulses:2});
+    addFlow('d2agents','d2gpu','#8b5cf6',{w:2,speed:.5,dlen:14,glen:14,glow:6,pulses:1});
+    log('✅ DC2 FULLY ACTIVE — All services operational','#00ff88');
+    document.getElementById('msim').textContent='FAILOVER DONE';
+  },3500);
+}
+
+function simAttack(){
+  log('🚨 SECURITY: Anomalous API calls — 847 req/sec from 185.x.x.x','#ee0000');
+  document.getElementById('msim').textContent='CYBER THREAT';
+  document.getElementById('msim').style.color='var(--rh)';
+
+  document.getElementById('d1fw').classList.add('warn');
+  document.getElementById('d1waf').classList.add('warn');
+
+  pulse('d1fw','d1waf','#ee0000',{w:3,speed:1.5,dlen:14,glen:6,glow:10,pulses:5,ttl:3});
+  log('NGFW: blocking 847 malicious req/sec · DDoS mitigation active','#ee0000');
+
+  setTimeout(()=>{
+    pulse('d1vault','d1agents','#f59e0b',{w:2,speed:1.2,dlen:12,glen:8,glow:7,pulses:3,ttl:2,label:'token rotation'});
+    log('Vault: rotating Splunk + GitHub tokens — credential hygiene response','#f59e0b');
+  },1800);
+
+  setTimeout(()=>{
+    boost('d1alert','d1splunk',{w:3,speed:1.2,dlen:14,glen:8,glow:9,pulses:4,dur:3000});
+    log('Security Agent: security_violation.spl triggered — SIEM correlation active','#8b5cf6');
+  },2500);
+
+  setTimeout(()=>{
+    document.getElementById('d1fw').classList.remove('warn');
+    document.getElementById('d1waf').classList.remove('warn');
+    log('🛡 THREAT NEUTRALISED — INC0049500 created · CHG raised for firewall update','#00ff88');
+    document.getElementById('msim').textContent='THREAT BLOCKED';
+    document.getElementById('msim').style.color='var(--green)';
+  },5000);
+}
+
+function resetAll(){
+  flows.length=0; simBusy=false;
+  document.getElementById('fov').style.display='none';
+  document.getElementById('msim').textContent='IDLE';
+  document.getElementById('msim').style.color='var(--muted)';
+  document.getElementById('mdc1').textContent='ACTIVE';
+  document.getElementById('mdc1').style.color='var(--active)';
+  document.getElementById('mdc2').textContent='PASSIVE';
+  document.getElementById('mdc2').style.color='var(--passive)';
+  document.getElementById('d2badge').textContent='◎ PASSIVE STANDBY';
+  document.getElementById('d2badge').style.color='var(--passive)';
+  document.getElementById('d2badge').style.background='rgba(0,255,136,.05)';
+  document.getElementById('p-dc2').innerHTML='<div class="dot" style="background:var(--passive)"></div>DC2 PUNE PASSIVE';
+
+  document.querySelectorAll('.srv').forEach(e=>{
+    e.classList.remove('off','warn');
+    const s=e.querySelector('.ss');
+    if(s){
+      const isRep=s.classList.contains('rep')||e.closest('#dc2p');
+      s.className='ss '+(isRep?'rep':'ok');
+    }
+  });
+  document.getElementById('d1rep').style.opacity='1';
+  log('System reset to initial state — all flows restored','#00d4ff');
+  setTimeout(initFlows,200);
+}
+
+log('All systems initialised · DC1 Active · DC2 Passive Standby · Replication healthy','#00ff88');
+</script>
+</body>
+</html>

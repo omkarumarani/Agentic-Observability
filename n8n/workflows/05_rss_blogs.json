@@ -1,0 +1,170 @@
+{
+  "id": "rss-blogs-otel-v1",
+  "name": "05 · CNCF/Vendor Blogs RSS → Pattern Library",
+  "active": true,
+  "meta": { "templateCredsSetupCompleted": true },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": [{ "name": "discovery" }, { "name": "rss" }, { "name": "blogs" }],
+  "nodes": [
+    {
+      "id": "sch-1",
+      "name": "Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [120, 380],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 12 }]
+        }
+      }
+    },
+    {
+      "id": "rss-otel",
+      "name": "RSS – OTel Blog",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [360, 180],
+      "parameters": {
+        "url": "https://opentelemetry.io/blog/index.xml"
+      }
+    },
+    {
+      "id": "rss-grafana",
+      "name": "RSS – Grafana Blog",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [360, 300],
+      "parameters": {
+        "url": "https://grafana.com/blog/index.xml"
+      }
+    },
+    {
+      "id": "rss-cncf",
+      "name": "RSS – CNCF Blog",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [360, 420],
+      "parameters": {
+        "url": "https://www.cncf.io/blog/feed/"
+      }
+    },
+    {
+      "id": "rss-datadog",
+      "name": "RSS – Datadog Blog",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [360, 540],
+      "parameters": {
+        "url": "https://www.datadoghq.com/blog/feed/"
+      }
+    },
+    {
+      "id": "merge-1",
+      "name": "Merge RSS Feeds",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [620, 360],
+      "parameters": { "mode": "append" }
+    },
+    {
+      "id": "code-1",
+      "name": "Filter & Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 360],
+      "parameters": {
+        "jsCode": "// n8n RSS node returns one item per feed entry. After merge we have all entries.\n// item.json fields: title, link, pubDate, content, contentSnippet, creator, isoDate\n\n// Keywords that indicate observability / failure pattern relevance\nconst OBS_KEYWORDS = [\n  'opentelemetry', 'otel', 'prometheus', 'grafana loki', 'jaeger', 'tempo',\n  'collector', 'metric', 'distributed trace', 'span', 'observability',\n  'alert', 'incident', 'outage', 'latency', 'error rate', 'saturation',\n  'kubernetes', 'k8s', 'cardinality', 'scrape', 'exporter', 'instrumentation',\n  'backpressure', 'telemetry drop', 'memory leak', 'cpu throttl', 'oom'\n];\n\n// Keywords that disqualify (marketing / noise)\nconst SKIP_PHRASES = [\n  'webinar', 'virtual event', 'conference', 'sponsorship',\n  'case study: small business', 'partner spotlight'\n];\n\n// Only look at articles published within the last 30 days\nconst CUTOFF_MS = Date.now() - (30 * 24 * 60 * 60 * 1000);\n\nconst seenUrls = new Set();\nconst output   = [];\n\nfor (const item of items) {\n  const entry = item.json;\n  if (!entry || !entry.link) continue;\n\n  // Dedup by URL\n  if (seenUrls.has(entry.link)) continue;\n  seenUrls.add(entry.link);\n\n  // Age gate\n  const pubDate = entry.isoDate ? new Date(entry.isoDate).getTime() : 0;\n  if (pubDate > 0 && pubDate < CUTOFF_MS) continue;\n\n  // Relevance check\n  const titleLower   = (entry.title   || '').toLowerCase();\n  const contentLower = (entry.contentSnippet || entry.content || '').toLowerCase();\n  const fullText     = titleLower + ' ' + contentLower;\n\n  const isRelevant = OBS_KEYWORDS.some(kw => fullText.includes(kw));\n  if (!isRelevant) continue;\n\n  const isNoise = SKIP_PHRASES.some(p => fullText.includes(p));\n  if (isNoise) continue;\n\n  // Derive source label from URL domain\n  let source = 'blog';\n  try {\n    const domain = new URL(entry.link).hostname.replace('www.', '').split('.')[0];\n    source = `blog-${domain}`;\n  } catch(e) {}\n\n  // Use link as source_id (URL is unique enough)\n  const sourceId = `${source}-${Buffer.from(entry.link).toString('base64').substring(0, 32)}`;\n\n  output.push({\n    json: {\n      source:    source,\n      source_id: sourceId,\n      url:       entry.link,\n      title:     entry.title || '',\n      body:     (entry.contentSnippet || entry.content || '').replace(/<[^>]+>/g, '').substring(0, 4000),\n      author:    entry.creator || 'unknown',\n      score:     1,   // blogs don't have engagement scores; treat all as score=1\n      tags:      ['blog', 'observability']\n    }\n  });\n}\n\nif (output.length === 0) {\n  return [{ json: { _skip: true, reason: 'no relevant blog posts found' } }];\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Skip Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 360],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json._skip }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "post-1",
+      "name": "POST → Pattern Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 360],
+      "parameters": {
+        "method":      "POST",
+        "url":         "={{ $env.PATTERN_LIBRARY_URL }}/issues/raw",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody":    true,
+        "contentType": "json",
+        "body":        "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout":            15000,
+          "ignoreResponseCode": true,
+          "response":           { "response": { "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "noop-done",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1600, 360],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Every 12 Hours": {
+      "main": [[
+        { "node": "RSS – OTel Blog",     "type": "main", "index": 0 },
+        { "node": "RSS – Grafana Blog",  "type": "main", "index": 0 },
+        { "node": "RSS – CNCF Blog",     "type": "main", "index": 0 },
+        { "node": "RSS – Datadog Blog",  "type": "main", "index": 0 }
+      ]]
+    },
+    "RSS – OTel Blog": {
+      "main": [[{ "node": "Merge RSS Feeds", "type": "main", "index": 0 }]]
+    },
+    "RSS – Grafana Blog": {
+      "main": [[{ "node": "Merge RSS Feeds", "type": "main", "index": 1 }]]
+    },
+    "RSS – CNCF Blog": {
+      "main": [[{ "node": "Merge RSS Feeds", "type": "main", "index": 2 }]]
+    },
+    "RSS – Datadog Blog": {
+      "main": [[{ "node": "Merge RSS Feeds", "type": "main", "index": 3 }]]
+    },
+    "Merge RSS Feeds": {
+      "main": [[{ "node": "Filter & Transform", "type": "main", "index": 0 }]]
+    },
+    "Filter & Transform": {
+      "main": [[{ "node": "Skip Empty", "type": "main", "index": 0 }]]
+    },
+    "Skip Empty": {
+      "main": [
+        [{ "node": "POST → Pattern Library", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "POST → Pattern Library": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  }
+}
