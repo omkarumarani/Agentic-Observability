@@ -108,6 +108,7 @@ XYOPS_URL: str = os.getenv("XYOPS_URL", "http://xyops:5522")
 XYOPS_API_KEY: str = os.getenv("XYOPS_API_KEY", "")
 BRIDGE_INTERNAL_URL: str = os.getenv("BRIDGE_INTERNAL_URL", "http://storage-agent:9001")
 OBS_INTELLIGENCE_URL: str = os.getenv("OBS_INTELLIGENCE_URL", "http://obs-intelligence:9100")
+GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 
 # ── Shared HTTP client ─────────────────────────────────────────────────────────
 _http: httpx.AsyncClient | None = None
@@ -312,7 +313,7 @@ async def predictive_alert(payload: PredictiveAlertPayload) -> dict:
         f"| **Scenario** | `{payload.scenario_id}` |\n"
         f"| **Risk Score** | `{payload.risk_score:.2f}` |\n"
         f"| **Confidence** | `{payload.confidence:.2f}` |\n"
-        f"| **Dashboard** | [Agentic AI Overview](http://grafana:3000/d/agentic-ai-overview) |\n\n"
+        f"| **Dashboard** | [Agentic AI Overview](" + GRAFANA_EXTERNAL_URL + "/d/agentic-ai-overview) |\n\n"
         f"### Intelligence Signals\n\n"
         f"{payload.description}{forecast_note}{anomaly_note}\n\n"
         f"### Recommended Action\n\n"
@@ -384,7 +385,7 @@ async def alertmanager_webhook(request: Request) -> dict:
         summary: str = alert.get("annotations", {}).get("summary", alert_name)
         description: str = alert.get("annotations", {}).get("description", "")
         dashboard_url: str = alert.get("annotations", {}).get(
-            "dashboard_url", "http://grafana:3000/d/agentic-ai-overview"
+            "dashboard_url", GRAFANA_EXTERNAL_URL + "/d/agentic-ai-overview"
         )
 
         if alert_status == "firing":

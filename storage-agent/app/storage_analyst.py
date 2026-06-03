@@ -51,6 +51,7 @@ LOKI_URL: str = os.getenv("LOKI_URL", "http://loki:3100")
 PROMETHEUS_URL: str = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
 STORAGE_SIMULATOR_URL: str = os.getenv("STORAGE_SIMULATOR_URL", "http://storage-simulator:9200")
 NOTIFY_EMAIL: str = os.getenv("NOTIFY_EMAIL", "")
+GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 
 AI_ENABLED: bool = _USE_OPENAI or _USE_CLAUDE
 
@@ -360,7 +361,7 @@ def build_enriched_ticket_body(
     metrics_context: str,
     ai_result: dict[str, str],
     bridge_trace_id: str,
-    grafana_url: str = "http://grafana:3000/d/agentic-ai-overview",
+    grafana_url: str = GRAFANA_EXTERNAL_URL + "/d/agentic-ai-overview",
     risk_score: float = 0.0,
     risk_level: str = "",
     evidence_lines: list | None = None,

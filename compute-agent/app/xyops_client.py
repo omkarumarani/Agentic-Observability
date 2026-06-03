@@ -50,6 +50,7 @@ logger = logging.getLogger("aiops-bridge.xyops_client")
 # Must match the xyOps container hostname (docker-compose: hostname: xyops).
 # Override via XYOPS_SERVER_HOSTNAME env var if your setup differs.
 _WORKFLOW_TARGET: str = os.getenv("XYOPS_SERVER_HOSTNAME", "xyops")
+_GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 
 # ── Step status icons ─────────────────────────────────────────────────────────
 _STATUS_ICON: dict[str, str] = {
@@ -171,7 +172,7 @@ _DEMO_START_BODY = (
     '"summary":"AIOps Agent Pipeline test - HighErrorRate on frontend-api",'
     '"description":"Test run from the xyOps AIOps Agent Pipeline workflow. '
     'Watch this ticket activity feed for live per-agent progress updates.",'
-    '"dashboard_url":"http://grafana:3000/d/obs-overview"}'
+    f'"dashboard_url":"{_GRAFANA_EXTERNAL_URL}/d/obs-overview"' + "}"
 )
 
 # Body reused by Agents 2–6 — session is keyed by service_name

@@ -27,6 +27,8 @@ GITEA_REPO           = os.getenv("GITEA_REPO",           "ansible-playbooks")
 XYOPS_URL            = os.getenv("XYOPS_URL",            "http://xyops:5522")
 POLL_INTERVAL        = int(os.getenv("POLL_INTERVAL_SECONDS", "5"))
 
+ANSIBLE_LIVE_MODE: bool = os.getenv("ANSIBLE_LIVE_MODE", "false").strip().lower() == "true"
+
 # External (browser-accessible) URLs — Docker-internal → localhost mapping
 XYOPS_EXT        = "http://localhost:5522"
 GITEA_EXT        = "http://localhost:3002"
@@ -198,10 +200,25 @@ def sidebar_controls() -> None:
         st.markdown(f"[🔬 Pattern Library]({PATTERN_LIB_EXT}/docs)")
 
 
+def dry_run_banner() -> None:
+    """Show a persistent warning banner when Ansible is running in dry-run mode.
+
+    Prevents learners from thinking remediations are actually executed when
+    ANSIBLE_LIVE_MODE=false (the safe default for the learning environment).
+    """
+    if not ANSIBLE_LIVE_MODE:
+        st.warning(
+            "**DRY-RUN MODE** — Ansible playbooks are simulated, not executed. "
+            "Set `ANSIBLE_LIVE_MODE=true` in docker-compose to enable live remediation.",
+            icon="⚠️",
+        )
+
+
 def page_header(title: str) -> None:
     """Inject theme CSS, render sidebar controls, and show page title + refresh time."""
     inject_theme_css()
     sidebar_controls()
+    dry_run_banner()
     c1, c2 = st.columns([5, 1])
     c1.title(title)
     c2.markdown(

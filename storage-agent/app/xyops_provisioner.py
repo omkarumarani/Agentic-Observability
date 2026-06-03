@@ -21,6 +21,7 @@ from typing import Any, Awaitable, Callable
 logger = logging.getLogger("storage-agent.xyops_provisioner")
 
 _WORKFLOW_TARGET: str = os.getenv("XYOPS_SERVER_HOSTNAME", "xyops")
+_GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 _WORKFLOW_EVENT_ID = "storage_aiops_pipeline_wf"
 _WORKFLOW_TITLE = "Storage AIOps Agent Pipeline"
 
@@ -39,7 +40,7 @@ _DEMO_START_BODY = (
     '"summary":"Storage AIOps Pipeline test - CephOSDDown on storage-simulator",'
     '"description":"Test run from the xyOps Storage AIOps Agent Pipeline workflow. '
     'Watch this ticket activity feed for live per-agent progress.",'
-    '"dashboard_url":"http://grafana:3000/d/agentic-ai-overview"}'
+    f'"dashboard_url":"{_GRAFANA_EXTERNAL_URL}/d/agentic-ai-overview"' + "}"
 )
 
 _AGENT_BODY = '{"session_id":"storage-simulator"}'

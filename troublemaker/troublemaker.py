@@ -850,6 +850,143 @@ def scenario_sick_storage() -> dict:
     }
 
 
+def _storage_scenario(name: str, hold_seconds: int = 60) -> bool:
+    """Activate a storage-simulator scenario. Returns True on success."""
+    try:
+        resp = requests.post(f"{STORAGE_SIM_URL}/scenario/{name}", timeout=10)
+        if resp.status_code == 200:
+            log.info("[storage]  Scenario activated: %s", name)
+            return True
+        log.warning("[storage]  Simulator returned HTTP %d for scenario %s", resp.status_code, name)
+    except requests.exceptions.RequestException as exc:
+        log.warning("[storage]  Could not reach storage-simulator at %s: %s", STORAGE_SIM_URL, exc)
+    return False
+
+
+def _storage_revert() -> None:
+    """Revert storage-simulator to healthy scenario."""
+    try:
+        requests.post(f"{STORAGE_SIM_URL}/scenario/healthy", timeout=10)
+        log.info("[storage]  Reverted to healthy")
+    except requests.exceptions.RequestException as exc:
+        log.warning("[storage]  Could not revert to healthy: %s", exc)
+
+
+def scenario_ceph_osd_down() -> dict:
+    """
+    Single Ceph OSD failure — exercises storage-agent CephOSDDown RCA pipeline.
+
+    What it generates
+    -----------------
+    Prometheus  storage_osd_up{osd_id="osd.1"} drops to 0.
+                CephOSDDown alert fires → Alertmanager routes to storage-agent.
+                storage_cluster_health_score drops from 2 (OK) to 1 (WARN).
+                storage_degraded_placement_groups increases.
+    Loki        Storage-agent logs show: "Single OSD down → recommending OSD reweight"
+    xyOps       Storage-agent creates APPROVAL_REQUIRED ticket: "ceph osd reweight osd.1"
+
+    Learning value
+    --------------
+    Watch the full storage RCA pipeline: alert fires → storage-agent analyzes →
+    obs-intelligence matches single_osd_down scenario → ticket created with
+    recommended playbook → approval gate (or autonomous if tier allows).
+    """
+    hold = 90
+    log.info("[ceph_osd_down]  Activating osd_down on storage-simulator (hold %ds)...", hold)
+    activated = _storage_scenario("osd_down")
+    if not activated:
+        return {
+            "endpoints": "storage-simulator",
+            "request_count": 0, "burst_size": 0,
+            "ok": 0, "err": 0, "avg_ms": 0.0, "max_ms": 0.0,
+            "notes": "osd_down scenario: storage-simulator unreachable",
+        }
+
+    # Send light compute traffic alongside — shows metrics stay healthy on the compute side
+    r = _fire_requests(ENDPOINTS_NORMAL, STEADY_REQUESTS, delay_between=1.0)
+    log.info(
+        "[ceph_osd_down]  Compute traffic ok=%d  Holding OSD-down for %ds "
+        "so alert fires and storage-agent RCA runs...",
+        r["ok"], hold,
+    )
+    time.sleep(hold)
+    _storage_revert()
+
+    return {
+        "endpoints": ", ".join(ENDPOINTS_NORMAL) + " + storage-simulator:osd_down",
+        "request_count": r["total"], "burst_size": 0,
+        "ok": r["ok"], "err": r["err"], "avg_ms": r["avg_ms"], "max_ms": r["max_ms"],
+        "notes": f"ceph osd.1 down for {hold}s → CephOSDDown alert → storage-agent RCA",
+    }
+
+
+def scenario_cross_domain_storm() -> dict:
+    """
+    Cross-domain incident storm — triggers both storage AND compute failures simultaneously.
+
+    Activates: storage osd_down + compute error_spike at the same time.
+    Designed to trigger the obs-intelligence CrossDomainCorrelator.
+
+    What it generates
+    -----------------
+    Prometheus  Both storage_osd_up drop and http_errors_total spike at the same timestamp.
+                CephOSDDown alert fires (domain=storage).
+                HighErrorRate alert fires (domain=compute).
+    obs-intel   CrossDomainCorrelator fires within 120s co-occurrence window.
+                UnifiedSREAssessment generated: identifies which is root cause.
+    xyOps       Two tickets created (one per domain). Each gets an out-of-band
+                comment with the cross-domain correlation chain.
+
+    Learning value
+    --------------
+    The most advanced scenario. Watch the Agent Mesh page during this scenario:
+    both compute and storage pipeline edges animate simultaneously.
+    The Autonomy & Trust page will show two concurrent sessions.
+    The key insight: a storage IO event can cascade into compute errors when the
+    app layer waits on slow DB writes.
+    """
+    hold = 75
+    log.info(
+        "[cross_domain_storm]  Activating osd_down on storage-simulator "
+        "+ error spike on compute simultaneously (hold %ds)...",
+        hold,
+    )
+    _storage_scenario("osd_down")
+
+    # Fire compute errors simultaneously with storage failure
+    total_ok = total_err = 0
+    total_requests = 0
+    elapsed_ms_list: list[float] = []
+
+    rounds = hold // 10
+    for i in range(rounds):
+        # Alternate: mostly errors (to push compute alert) + some normal (to prove partial service)
+        r_err = _fire_requests(["/error", "/backend-error"], 4, delay_between=0.2)
+        r_norm = _fire_requests(ENDPOINTS_NORMAL, 3, delay_between=0.3)
+        total_ok      += r_err["ok"] + r_norm["ok"]
+        total_err     += r_err["err"] + r_norm["err"]
+        total_requests += r_err["total"] + r_norm["total"]
+        elapsed_ms_list.append(r_err["avg_ms"])
+        elapsed_ms_list.append(r_norm["avg_ms"])
+        log.info(
+            "[cross_domain_storm]  Round %d/%d  compute_err=%d  storage=OSD_DOWN",
+            i + 1, rounds, r_err["err"],
+        )
+        time.sleep(2)
+
+    log.info("[cross_domain_storm]  Storm over — reverting storage to healthy")
+    _storage_revert()
+
+    avg_ms = sum(elapsed_ms_list) / len(elapsed_ms_list) if elapsed_ms_list else 0.0
+    return {
+        "endpoints": "compute:/error + storage:osd_down",
+        "request_count": total_requests, "burst_size": 0,
+        "ok": total_ok, "err": total_err,
+        "avg_ms": avg_ms, "max_ms": max(elapsed_ms_list) if elapsed_ms_list else 0.0,
+        "notes": f"cross-domain: storage osd_down + compute error_spike for {hold}s",
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Scenario registry
 # ─────────────────────────────────────────────────────────────────────────────
@@ -884,6 +1021,10 @@ def _build_registry() -> list[ScenarioEntry]:
         ScenarioEntry("sick_api",        scenario_sick_api,        enabled=True,          weight=2),
         ScenarioEntry("sick_db",         scenario_sick_db,         enabled=True,          weight=2),
         ScenarioEntry("sick_storage",    scenario_sick_storage,    enabled=True,          weight=1),
+        # Storage domain scenarios (exercise storage-agent RCA pipeline)
+        ScenarioEntry("ceph_osd_down",   scenario_ceph_osd_down,   enabled=True,          weight=1),
+        # Cross-domain storm (triggers obs-intelligence CrossDomainCorrelator)
+        ScenarioEntry("cross_domain_storm", scenario_cross_domain_storm, enabled=True,    weight=1),
     ]
 
 

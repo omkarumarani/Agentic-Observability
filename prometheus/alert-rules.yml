@@ -30,12 +30,7 @@ groups:
 
       # Warning: >5% of requests are errors for ≥1 minute
       - alert: HighErrorRate
-        expr: |
-          (
-            sum by (service_name) (rate(http_errors_total[2m]))
-            /
-            sum by (service_name) (rate(http_requests_total[2m]))
-          ) > 0.05
+        expr: job:http_error_rate:ratio_2m > 0.05
         for: 1m
         labels:
           severity: warning
@@ -46,17 +41,12 @@ groups:
             {{ $labels.service_name }} error rate is
             {{ $value | humanizePercentage }} over the last 2 minutes.
             Expected < 5%.
-          dashboard_url: "http://grafana:3000/d/obs-overview"
+          dashboard_url: "http://localhost:3001/d/obs-overview"
           runbook_url: "http://xyops:5522"
 
       # Critical: >20% of requests are errors for ≥30 seconds
       - alert: CriticalErrorRate
-        expr: |
-          (
-            sum by (service_name) (rate(http_errors_total[2m]))
-            /
-            sum by (service_name) (rate(http_requests_total[2m]))
-          ) > 0.20
+        expr: job:http_error_rate:ratio_2m > 0.20
         for: 30s
         labels:
           severity: critical
@@ -67,7 +57,7 @@ groups:
             {{ $labels.service_name }} error rate is
             {{ $value | humanizePercentage }} — immediate action required.
             SLO breach imminent.
-          dashboard_url: "http://grafana:3000/d/obs-overview"
+          dashboard_url: "http://localhost:3001/d/obs-overview"
           runbook_url: "http://xyops:5522"
 
   # ────────────────────────────────────────────────────────────
@@ -80,13 +70,7 @@ groups:
 
       # Warning: p99 latency > 3 seconds for ≥2 minutes
       - alert: HighP99Latency
-        expr: |
-          histogram_quantile(
-            0.99,
-            sum by (service_name, le) (
-              rate(http_request_duration_seconds_bucket[5m])
-            )
-          ) > 3.0
+        expr: job:http_request_duration_seconds:p99_5m > 3.0
         for: 2m
         labels:
           severity: warning
@@ -97,18 +81,12 @@ groups:
             {{ $labels.service_name }} p99 latency is
             {{ $value | humanizeDuration }} over last 5 minutes (threshold 3s).
             Check for slow downstream calls or resource saturation.
-          dashboard_url: "http://grafana:3000/d/obs-overview"
+          dashboard_url: "http://localhost:3001/d/obs-overview"
           runbook_url: "http://xyops:5522"
 
       # Warning: p50 (median) latency > 1 second — something broadly wrong
       - alert: HighMedianLatency
-        expr: |
-          histogram_quantile(
-            0.50,
-            sum by (service_name, le) (
-              rate(http_request_duration_seconds_bucket[5m])
-            )
-          ) > 1.0
+        expr: job:http_request_duration_seconds:p50_5m > 1.0
         for: 3m
         labels:
           severity: warning
@@ -118,7 +96,7 @@ groups:
           description: >-
             {{ $labels.service_name }} median (p50) latency is
             {{ $value | humanizeDuration }} — more than half of requests are slow.
-          dashboard_url: "http://grafana:3000/d/obs-overview"
+          dashboard_url: "http://localhost:3001/d/obs-overview"
           runbook_url: "http://xyops:5522"
 
   # ────────────────────────────────────────────────────────────
@@ -132,11 +110,7 @@ groups:
       # Traffic spike: current rate > 5x the 10-min average
       - alert: TrafficSpike
         expr: |
-          (
-            sum by (service_name) (rate(http_requests_total[1m]))
-            /
-            sum by (service_name) (rate(http_requests_total[10m]))
-          ) > 5
+          job:http_request_rate:rate_1m / job:http_request_rate:rate_10m > 5
         for: 30s
         labels:
           severity: warning
@@ -146,7 +120,7 @@ groups:
           description: >-
             {{ $labels.service_name }} is receiving 5x its normal request rate.
             May indicate a DDoS, runaway client, or load test.
-          dashboard_url: "http://grafana:3000/d/obs-overview"
+          dashboard_url: "http://localhost:3001/d/obs-overview"
           runbook_url: "http://xyops:5522"
 
   # ────────────────────────────────────────────────────────────
@@ -170,7 +144,7 @@ groups:
             The OpenTelemetry Collector is dropping spans — likely memory pressure.
             Current drop rate: {{ $value | humanize }}/s.
             Check collector memory limits and batch processor settings.
-          dashboard_url: "http://grafana:3000"
+          dashboard_url: "http://localhost:3001"
           runbook_url: "http://xyops:5522"
 
   # ────────────────────────────────────────────────────────────
@@ -197,7 +171,7 @@ groups:
             OSD {{ $labels.osd_id }} has been down for > 30s.
             Cluster has degraded placement groups.
             Run: ceph osd reweight {{ $labels.osd_id }} 0.0  to safely remove it.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # Two or more OSDs offline → cluster ERROR, data at risk
@@ -213,13 +187,12 @@ groups:
           description: >-
             {{ $value }} OSDs are down. Data availability is at risk.
             Immediate human intervention required — do NOT auto-remediate.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # Pool approaching capacity — early warning
       - alert: CephPoolNearFull
-        expr: |
-          (storage_pool_used_bytes / storage_pool_capacity_bytes) > 0.85
+        expr: job:storage_pool_fill_ratio:current > 0.85
         for: 1m
         labels:
           severity: warning
@@ -230,13 +203,12 @@ groups:
           description: >-
             Pool {{ $labels.pool }} is at {{ $value | humanizePercentage }} capacity.
             Plan data archival or pool expansion before writes fail.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # Pool critically full — writes will be throttled / rejected
       - alert: CephPoolFull
-        expr: |
-          (storage_pool_used_bytes / storage_pool_capacity_bytes) > 0.95
+        expr: job:storage_pool_fill_ratio:current > 0.95
         for: 30s
         labels:
           severity: critical
@@ -247,7 +219,7 @@ groups:
           description: >-
             Pool {{ $labels.pool }} is at {{ $value | humanizePercentage }} capacity.
             New writes will fail. Immediate action: archive data or expand pool.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # PVC IO latency above threshold — IO pressure affecting workloads
@@ -263,7 +235,7 @@ groups:
           description: >-
             PVC {{ $labels.pvc }} latency is {{ $value | humanizeDuration }}
             (threshold: 50ms). Check for disk saturation or noisy neighbour PVCs.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # One PVC consuming extreme IOPS — noisy neighbour
@@ -280,7 +252,7 @@ groups:
             PVC {{ $labels.pvc }} is consuming {{ $value | humanize }} IOPS
             ({{ $labels.operation }}) which may be starving neighbour PVCs.
             Consider applying IO throttle via StorageClass QoS.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
   # ────────────────────────────────────────────────────────────
@@ -315,7 +287,7 @@ groups:
             but no Prometheus alert is currently firing for domain={{ $labels.domain }}.
             A predictive alert has been sent to the domain agent.
             Check the xyOps approval queue for a [PREDICTIVE] ticket.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # Informational: an anomaly Z-score exceeds 3.0 — statistically unusual
@@ -332,7 +304,7 @@ groups:
             Metric {{ $labels.metric_name }} has a Z-score of {{ $value | humanize }}
             (threshold ±3.0), indicating statistically unusual behaviour in the
             {{ $labels.domain }} domain.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
       # Cluster health degraded (health score < 2 = not OK)
@@ -349,7 +321,7 @@ groups:
             Cluster health score {{ $value }} (0=ERROR, 1=WARN, 2=OK).
             Degraded PGs: {{ with query "storage_degraded_placement_groups" }}{{ . | first | value | printf "%.0f" }}{{ else }}unknown{{ end }}.
             Investigate OSD status and placement group recovery.
-          dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
+          dashboard_url: "http://localhost:3001/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
 
   # ────────────────────────────────────────────────────────────
@@ -376,17 +348,9 @@ groups:
       # 2-20% is the grey zone: not healthy, not dead.
       - alert: PartialFailureDetected
         expr: |
-          (
-            sum by (service_name) (rate(http_errors_total[2m]))
-            /
-            sum by (service_name) (rate(http_requests_total[2m]))
-          ) > 0.02
+          job:http_error_rate:ratio_2m > 0.02
           and
-          (
-            sum by (service_name) (rate(http_errors_total[2m]))
-            /
-            sum by (service_name) (rate(http_requests_total[2m]))
-          ) < 0.20
+          job:http_error_rate:ratio_2m < 0.20
         for: 2m
         labels:
           severity: warning
@@ -400,25 +364,14 @@ groups:
             but delivering a degraded experience. Health checks remain green.
             Look for connection pool issues, flaky downstream dependencies, or
             disk-level write failures causing sporadic HTTP 500 responses.
-          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          dashboard_url: "http://localhost:3001/d/sick-not-dead"
           runbook_url: "http://xyops:5522"
 
       # Bimodal latency distribution fingerprint.
       # p99/p50 ratio > 8 means there are two populations: fast (healthy) and
       # slow (sick). Average and p50 look OK while p99 is alarming.
       - alert: LatencyPercentileDivergence
-        expr: |
-          (
-            histogram_quantile(
-              0.99,
-              sum by (service_name, le) (rate(http_request_duration_seconds_bucket[5m]))
-            )
-            /
-            histogram_quantile(
-              0.50,
-              sum by (service_name, le) (rate(http_request_duration_seconds_bucket[5m]))
-            )
-          ) > 8
+        expr: job:http_request_duration_seconds:p99_p50_ratio_5m > 8
         for: 2m
         labels:
           severity: warning
@@ -431,23 +384,16 @@ groups:
             Two latency populations coexist: most requests are fast, a tail is very slow.
             This is the statistical fingerprint of sick-but-not-dead. Check for connection
             pool contention, GC pauses, or a slow downstream affecting a subset of requests.
-          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          dashboard_url: "http://localhost:3001/d/sick-not-dead"
           runbook_url: "http://xyops:5522"
 
       # Composite sick API signal: p95 > 2s with error rate below 25%.
       # High tail latency + still serving most requests = sick but not dead.
       - alert: SickAPINotDead
         expr: |
-          histogram_quantile(
-            0.95,
-            sum by (service_name, le) (rate(http_request_duration_seconds_bucket[5m]))
-          ) > 2.0
+          job:http_request_duration_seconds:p95_5m > 2.0
           and
-          (
-            sum by (service_name) (rate(http_errors_total[2m]))
-            /
-            sum by (service_name) (rate(http_requests_total[2m]))
-          ) < 0.25
+          job:http_error_rate:ratio_2m < 0.25
         for: 2m
         labels:
           severity: warning
@@ -460,7 +406,7 @@ groups:
             Service is still responding (not dead) but tail latency indicates degraded behaviour.
             Typical causes: saturated connection pool, slow DB queries on hot paths,
             or a flaky downstream dependency affecting a subset of requests.
-          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          dashboard_url: "http://localhost:3001/d/sick-not-dead"
           runbook_url: "http://xyops:5522"
 
       # Storage brownout — the most deceptive sick-but-not-dead pattern.
@@ -490,18 +436,14 @@ groups:
             Users experience IO-bound slowness. This is the storage brownout: sick but not dead.
             Investigate: ceph iostat, NVMe queue depth, background scrub schedule,
             or a noisy neighbour saturating the shared IO channel.
-          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          dashboard_url: "http://localhost:3001/d/sick-not-dead"
           runbook_url: "http://xyops:5522"
 
       # DB pool saturation via downstream call duration p95 > 2s.
       # Fires BEFORE error rate climbs because pool contention slows calls
       # before it starts rejecting them. Early-warning indicator.
       - alert: ConnectionPoolApproachingSaturation
-        expr: |
-          histogram_quantile(
-            0.95,
-            sum by (le) (rate(downstream_call_duration_seconds_bucket[5m]))
-          ) > 2.0
+        expr: job:downstream_call_duration_seconds:p95_5m > 2.0
         for: 3m
         labels:
           severity: warning
@@ -515,5 +457,5 @@ groups:
             Pattern: DB connection pool approaching exhaustion. Most calls queue and complete
             (sick) but a growing fraction will time out (dead). Check: DB pool metrics,
             slow query logs, backend in_flight request count.
-          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          dashboard_url: "http://localhost:3001/d/sick-not-dead"
           runbook_url: "http://xyops:5522"

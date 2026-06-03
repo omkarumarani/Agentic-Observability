@@ -254,6 +254,8 @@ services:
     volumes:
       # Config file (read-only bind mount)
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Recording rules — pre-computed metrics (loaded before alert rules)
+      - ./prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml:ro
       # Alert rules file — defines WHEN to fire alerts to Alertmanager
       - ./prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       # Persistent TSDB storage
@@ -1313,6 +1315,7 @@ services:
       XYOPS_URL:            "http://xyops:5522"
       POLL_INTERVAL_SECONDS: "5"
       PATTERN_LIBRARY_URL:  "http://pattern-library:9300"
+      ANSIBLE_LIVE_MODE:    "false"
     ports:
       - "3500:8501"    # Streamlit UI  http://localhost:3500
     depends_on:

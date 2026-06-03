@@ -1,0 +1,115 @@
+# prometheus/recording-rules.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Recording Rules
+#
+# Pre-compute expensive PromQL expressions and store them as new metrics.
+# Alert rules and dashboards query these cheap metrics instead of recomputing
+# the expensive originals on every evaluation.
+#
+# Why this matters:
+#   histogram_quantile() over a 5m rate window is one of the most expensive
+#   PromQL expressions — it scans every bucket label in the histogram for the
+#   specified time range.  With 8 scrape jobs at 15s intervals this runs 4
+#   times per minute.  Recording rules evaluate once and cache the result.
+#
+# Naming convention:  <aggregation>:<metric>:<window>
+#   level:metric:window  (Prometheus community standard)
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+
+  # ── HTTP Latency Percentiles ────────────────────────────────────────────────
+  # Pre-compute p50/p95/p99 latency per service_name from the OTel histogram.
+  # Used by: HighP99Latency, HighMedianLatency, SickAPINotDead,
+  #          LatencyPercentileDivergence alert rules + Grafana dashboards.
+  - name: http_latency_recording
+    interval: 15s
+    rules:
+
+      # p99 latency per service (5m rate window)
+      - record: job:http_request_duration_seconds:p99_5m
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (service_name, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      # p95 latency per service (5m rate window)
+      - record: job:http_request_duration_seconds:p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service_name, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      # p50 (median) latency per service (5m rate window)
+      - record: job:http_request_duration_seconds:p50_5m
+        expr: |
+          histogram_quantile(
+            0.50,
+            sum by (service_name, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      # p99/p50 ratio — bimodal latency fingerprint (sick-but-not-dead detector)
+      - record: job:http_request_duration_seconds:p99_p50_ratio_5m
+        expr: |
+          job:http_request_duration_seconds:p99_5m
+          /
+          job:http_request_duration_seconds:p50_5m
+
+  # ── HTTP Error Rate ─────────────────────────────────────────────────────────
+  # Pre-compute error rate per service from the OTel counters.
+  # Used by: HighErrorRate, CriticalErrorRate, PartialFailureDetected alert rules.
+  - name: http_error_rate_recording
+    interval: 15s
+    rules:
+
+      # Error rate ratio per service (2m rate window)
+      - record: job:http_error_rate:ratio_2m
+        expr: |
+          sum by (service_name) (rate(http_errors_total[2m]))
+          /
+          sum by (service_name) (rate(http_requests_total[2m]))
+
+      # Raw request rate per service (1m rate window) — for traffic spike detection
+      - record: job:http_request_rate:rate_1m
+        expr: |
+          sum by (service_name) (rate(http_requests_total[1m]))
+
+      # Baseline request rate (10m window) — denominator for TrafficSpike alert
+      - record: job:http_request_rate:rate_10m
+        expr: |
+          sum by (service_name) (rate(http_requests_total[10m]))
+
+  # ── Downstream Call Latency ─────────────────────────────────────────────────
+  # Pre-compute frontend→backend downstream call percentiles.
+  # Used by: ConnectionPoolApproachingSaturation alert rule.
+  - name: downstream_latency_recording
+    interval: 15s
+    rules:
+
+      # p95 downstream call latency (5m rate window)
+      - record: job:downstream_call_duration_seconds:p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(downstream_call_duration_seconds_bucket[5m]))
+          )
+
+  # ── Storage Capacity ────────────────────────────────────────────────────────
+  # Pre-compute pool fill ratio for storage alerts and dashboards.
+  # Used by: CephPoolNearFull, CephPoolFull alert rules.
+  - name: storage_capacity_recording
+    interval: 15s
+    rules:
+
+      # Pool fill ratio per pool label
+      - record: job:storage_pool_fill_ratio:current
+        expr: |
+          storage_pool_used_bytes / storage_pool_capacity_bytes

@@ -72,6 +72,7 @@ REQUIRE_APPROVAL: bool = os.getenv("STORAGE_REQUIRE_APPROVAL", "true").lower() !
 WORKFLOW_STEP_DELAY: int = int(os.getenv("WORKFLOW_STEP_DELAY_SECONDS", "5"))
 SESSION_TTL_SECONDS: int = 3600
 _OBS_INTELLIGENCE_URL: str = os.getenv("OBS_INTELLIGENCE_URL", "http://obs-intelligence:9100")
+GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 
 TOTAL_STEPS = 5
 
@@ -195,7 +196,7 @@ class StartRequest(BaseModel):
     severity: str = "warning"
     summary: str = "Storage incident"
     description: str = ""
-    dashboard_url: str = "http://grafana:3000/d/agentic-ai-overview"
+    dashboard_url: str = GRAFANA_EXTERNAL_URL + "/d/agentic-ai-overview"
 
 
 class AgentRequest(BaseModel):
@@ -224,6 +225,19 @@ async def _xyops_post(path: str, body: dict, http: httpx.AsyncClient) -> dict:
         return resp.json()
     except Exception as exc:
         logger.warning("xyOps POST %s failed: %s", path, exc)
+        return {"error": str(exc)}
+
+
+async def _xyops_get(path: str, http: httpx.AsyncClient) -> dict:
+    try:
+        resp = await http.get(
+            f"{XYOPS_URL}{path}",
+            headers=_xyops_headers(),
+            timeout=10.0,
+        )
+        return resp.json()
+    except Exception as exc:
+        logger.warning("xyOps GET %s failed: %s", path, exc)
         return {"error": str(exc)}
 
 
@@ -264,6 +278,25 @@ async def pipeline_start(req: StartRequest) -> dict:
     )
 
     async with httpx.AsyncClient() as http:
+        # Deduplication: skip if an open ticket already exists for this alert+service
+        import urllib.parse as _urlparse
+        q = _urlparse.quote(f"[Storage] {req.alert_name} {req.service_name} status:open")
+        existing = await _xyops_get(f"/api/app/search_tickets/v1?query={q}&limit=5", http)
+        open_tickets = [t for t in existing.get("rows", []) if t.get("status") == "open"]
+        if open_tickets:
+            existing_id = open_tickets[0].get("id", "")
+            existing_num = open_tickets[0].get("num", 0)
+            logger.info(
+                "Skipping duplicate storage ticket — open ticket exists  "
+                "alert=%s  service=%s  ticket_id=%s",
+                req.alert_name, req.service_name, existing_id,
+            )
+            session.ticket_id = existing_id
+            session.ticket_num = existing_num
+            _sessions[session.session_id] = session
+            return {"status": "ok", "session_id": session.session_id,
+                    "ticket_id": existing_id, "ticket_num": existing_num, "duplicate": True}
+
         ticket_body = {
             "title": f"[Storage] {req.alert_name} on {req.service_name}",
             "severity": req.severity,

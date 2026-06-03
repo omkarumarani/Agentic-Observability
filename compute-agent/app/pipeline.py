@@ -84,6 +84,7 @@ REQUIRE_APPROVAL: bool = os.getenv("REQUIRE_APPROVAL", "true").lower() != "false
 APPROVAL_SEVERITY_THRESHOLD: set[str] = {"warning", "critical"}
 SESSION_TTL_SECONDS: int = 3600  # sessions expire after 1 hour
 _OBS_INTELLIGENCE_URL: str = os.getenv("OBS_INTELLIGENCE_URL", "http://obs-intelligence:9100")
+GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 # Seconds each workflow node visibly "runs" before completing — lets you watch
 # the xyOps canvas step by step.  Set to 0 to disable.
 WORKFLOW_STEP_DELAY: int = int(os.getenv("WORKFLOW_STEP_DELAY_SECONDS", "5"))
@@ -250,7 +251,7 @@ def _load_sessions_from_db() -> None:
                 severity     = row["severity"] or "warning",
                 summary      = analysis.get("summary", ""),
                 description  = "",
-                dashboard_url= "http://grafana:3000",
+                dashboard_url= GRAFANA_EXTERNAL_URL,
                 starts_at    = "",
                 created_at   = row["created_at"] or time.time(),
                 stage        = row["stage"] or "created",
@@ -321,7 +322,7 @@ def _require_session(session_id: str) -> PipelineSession:
                     severity          = row["severity"] or "warning",
                     summary           = analysis.get("summary", ""),
                     description       = "",
-                    dashboard_url     = "http://grafana:3000",
+                    dashboard_url     = GRAFANA_EXTERNAL_URL,
                     starts_at         = "",
                     created_at        = row["created_at"] or time.time(),
                     stage             = row["stage"] or "complete",
@@ -544,7 +545,7 @@ class StartRequest(BaseModel):
     severity: str = "warning"
     summary: str = ""
     description: str = ""
-    dashboard_url: str = "http://grafana:3000/d/obs-overview"
+    dashboard_url: str = GRAFANA_EXTERNAL_URL + "/d/obs-overview"
     starts_at: str = ""
     session_id: str = ""     # defaults to service_name if not provided
 

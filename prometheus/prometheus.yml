@@ -104,6 +104,7 @@ alerting:
 #   - Recording rules: pre-compute expensive queries and store as new metrics
 # ═════════════════════════════════════════════════════════════════════════════
 rule_files:
+  - "/etc/prometheus/recording-rules.yml"
   - "/etc/prometheus/alert-rules.yml"
 
 

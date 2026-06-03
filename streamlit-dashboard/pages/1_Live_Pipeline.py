@@ -131,8 +131,7 @@ def _live_pipeline_view() -> None:
             st.markdown(f"**Risk Score:** `{incident.get('risk_score', 0):.2f}`")
             grafana = incident.get("grafana_url", "")
             if grafana:
-                link = grafana.replace("grafana:3000", "localhost:3001")
-                st.markdown(f"[📊 Open Grafana Dashboard]({link})")
+                st.markdown(f"[📊 Open Grafana Dashboard]({grafana})")
 
         ticket_num = s.get("ticket_num", 0)
         ticket_id  = s.get("ticket_id", "")

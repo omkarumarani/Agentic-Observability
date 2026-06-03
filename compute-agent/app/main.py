@@ -153,6 +153,7 @@ REQUIRE_APPROVAL: bool = os.getenv("REQUIRE_APPROVAL", "true").lower() != "false
 APPROVAL_SEVERITY_THRESHOLD: set[str] = {"warning", "critical"}
 OBS_INTELLIGENCE_URL: str = os.getenv("OBS_INTELLIGENCE_URL", "http://obs-intelligence:9100")
 LOCAL_LLM_MODEL: str = os.getenv("LOCAL_LLM_MODEL", "qwen3.5")
+GRAFANA_EXTERNAL_URL: str = os.getenv("GRAFANA_EXTERNAL_URL", "http://localhost:3001")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -243,7 +244,7 @@ async def predictive_alert(payload: PredictiveAlertPayload) -> dict:
         f"| **Scenario** | `{payload.scenario_id}` |\n"
         f"| **Risk Score** | `{payload.risk_score:.2f}` |\n"
         f"| **Confidence** | `{payload.confidence:.2f}` |\n"
-        f"| **Dashboard** | [Agentic AI Overview](http://grafana:3000/d/agentic-ai-overview) |\n\n"
+        f"| **Dashboard** | [Agentic AI Overview](" + GRAFANA_EXTERNAL_URL + "/d/agentic-ai-overview) |\n\n"
         f"### Intelligence Signals\n\n"
         f"{payload.description}{forecast_note}{anomaly_note}\n\n"
         f"### Recommended Action\n\n"
@@ -545,7 +546,7 @@ async def alertmanager_webhook(request: Request) -> dict:
         summary: str = alert.get("annotations", {}).get("summary", alert_name)
         description: str = alert.get("annotations", {}).get("description", "")
         dashboard_url: str = alert.get("annotations", {}).get(
-            "dashboard_url", "http://grafana:3000"
+            "dashboard_url", GRAFANA_EXTERNAL_URL
         )
         starts_at: str = alert.get("startsAt", "")
 
@@ -784,7 +785,24 @@ async def _create_xyops_ticket(
     Open the ticket in xyOps and watch the [>>]/[OK]/[--] comments
     appear in real time as each stage completes.
     """
-    # ── 0. Create skeleton ticket immediately ───────────────────────────────
+    # ── 0a. Deduplication check — skip if an open ticket already exists ───────
+    # Alertmanager can re-fire the same alert during group_interval windows.
+    # Prevent duplicate xyOps tickets by searching for an open ticket with the
+    # same alert+service subject before creating a new one.
+    q = urllib.parse.quote(f"[AIOPS] {alert_name} {service_name} status:open")
+    existing = await _xyops_get(f"/api/app/search_tickets/v1?query={q}&limit=5")
+    open_tickets = [t for t in existing.get("rows", []) if t.get("status") == "open"]
+    if open_tickets:
+        existing_id = open_tickets[0].get("id", "")
+        existing_num = open_tickets[0].get("num", 0)
+        logger.info(
+            "Skipping duplicate ticket — open ticket already exists  "
+            "alert=%s  service=%s  ticket_id=%s  ticket_num=%s",
+            alert_name, service_name, existing_id, existing_num,
+        )
+        return {"ticket_id": existing_id, "ticket_num": existing_num, "duplicate": True}
+
+    # ── 0b. Create skeleton ticket immediately ──────────────────────────────
     # We need a ticket ID before the AI pipeline runs so we have somewhere
     # to post live step comments.  The body is a minimal stub that gets
     # replaced with the full enriched content in Step 4.
