@@ -145,6 +145,50 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "cluster_health": 2,
         "degraded_pgs": 0,
     },
+
+    # ──────────────────────────────────────────────────────────────────────
+    # SICK BUT NOT DEAD — Storage Brownout
+    #
+    # The most pedagogically powerful scenario: ALL health checks report OK
+    # while IO latency is 8–18x above the normal baseline.
+    #
+    # What traditional monitoring sees:
+    #   storage_osd_up        →  all 3 OSDs = 1 (UP)         ← GREEN
+    #   storage_cluster_health →  2 = OK                      ← GREEN
+    #   storage_degraded_pgs  →  0                            ← GREEN
+    #   pool fill %           →  65% (below 85% warn thresh)  ← GREEN
+    #   PVCHighLatency alert  →  threshold is 50ms; sick is ~18-30ms ← GREEN
+    #
+    # What observability detects:
+    #   storage_io_latency_seconds{pvc="pvc-db-0"} → 0.018 (vs 0.001 normal = 18x)
+    #   SickStorageBrownout alert fires (threshold 15ms, all OSDs up, health=2)
+    #
+    # This gap is the brownout signature.
+    # Real-world causes: NVMe queue depth saturation, shared SAS bus contention,
+    # Ceph scrub running at max priority during business hours,
+    # background rebalance after adding a new OSD consuming IO bandwidth.
+    # ──────────────────────────────────────────────────────────────────────
+    "sick_storage": {
+        # OSDs: ALL UP — health check passes, CephOSDDown does NOT fire
+        "osd_up":        {"osd.0": 1, "osd.1": 1, "osd.2": 1},
+        # Pool at 65% — below the 85% CephPoolNearFull warning threshold
+        "pool_used":     {"ssd-pool": 650 * GB, "hdd-pool": 1_950 * GB},
+        "pool_capacity": {"ssd-pool": 1_000 * GB, "hdd-pool": 3_000 * GB},
+        # IO latency 8–18x normal:
+        #   pvc-app-0: 0.002 → 0.025 s  (12x)   CephPVCHighLatency threshold=0.050 → no alert!
+        #   pvc-app-1: 0.003 → 0.030 s  (10x)
+        #   pvc-db-0:  0.001 → 0.018 s  (18x)   SickStorageBrownout threshold=0.015 → FIRES
+        "io_latency":    {"pvc-app-0": 0.025, "pvc-app-1": 0.030, "pvc-db-0": 0.018},
+        # IOPS elevated but below the 2000 NoisyPVCDetected threshold
+        "pvc_iops": {
+            ("pvc-app-0", "read"): 420, ("pvc-app-0", "write"): 180,
+            ("pvc-app-1", "read"): 380, ("pvc-app-1", "write"): 150,
+            ("pvc-db-0",  "read"): 950, ("pvc-db-0",  "write"): 580,
+        },
+        # Cluster health = 2 (OK) — the deception: reports HEALTHY
+        "cluster_health": 2,
+        "degraded_pgs": 0,
+    },
 }
 
 # Active scenario name (module-level mutable string)
@@ -216,6 +260,7 @@ async def list_scenarios() -> dict:
             "pool_full":        "SSD pool at 95% capacity — writes throttled",
             "latency_spike":    "All PVC latency 10-40x normal — IO pressure",
             "noisy_pvc":        "pvc-app-0 at 10x IOPS — noisy neighbour affecting pvc-app-1 and pvc-db-0",
+            "sick_storage":     "SICK BUT NOT DEAD: all OSDs up, cluster_health=2 (OK), IO latency 8-18x normal — storage brownout",
         },
     }
 

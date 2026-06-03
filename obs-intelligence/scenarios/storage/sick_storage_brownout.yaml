@@ -1,0 +1,95 @@
+scenario_id:   sick_storage_brownout
+display_name:  "Sick but Not Dead — Storage IO Brownout"
+domain:        storage
+version:       "1.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# What this scenario teaches
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# This is the most deceptive sick-but-not-dead variant. The storage cluster
+# reports itself as fully healthy while IO latency is 8-18x above normal:
+#
+#   Traditional monitoring sees:
+#     storage_osd_up{osd_id}     →  all 3 OSDs = 1 (UP)       ← GREEN
+#     storage_cluster_health_score  →  2 = OK                  ← GREEN
+#     storage_degraded_placement_groups → 0                     ← GREEN
+#     CephPVCHighLatency (threshold 50ms) → NOT firing          ← GREEN
+#
+#   Observability detects:
+#     storage_io_latency_seconds{pvc="pvc-db-0"} = 0.018 s (18x normal 0.001 s)
+#     SickStorageBrownout alert fires (IO > 15ms + all OSDs up + cluster=2)
+#
+# Real-world causes: NVMe queue depth saturation, shared SAS bus contention,
+# Ceph scrub running at max priority during business hours, background
+# rebalance after OSD addition, noisy-neighbour PVC on the same OSD.
+#
+# Triggered by: sick_storage troublemaker scenario → storage-simulator
+#               /scenario/sick_storage endpoint.
+# ─────────────────────────────────────────────────────────────────────────────
+
+alert_name_patterns:
+  - "SickStorageBrownout"
+  - "StorageBrownout"
+  - "PVCHighLatency"
+
+alert_match_weight: 0.35
+confidence_threshold: 0.30
+
+action:       investigate_io_saturation
+autonomy:     approval_gated
+irreversible: false
+
+rca: >
+  Storage cluster health API reports OK (all OSDs up, cluster_health_score=2,
+  zero degraded placement groups) but IO latency is 8-18x the normal baseline.
+  This is a storage brownout: sick but not dead.
+  Health check endpoints measure BINARY availability — they do NOT measure IO
+  throughput or queue depth. A storage device can be online and accepting writes
+  while its internal queue is saturated, producing high latency for all operations.
+  IO saturation without OSD failure is typically caused by:
+    - NVMe queue depth saturation under sustained mixed IO load
+    - Shared SAS/SATA bus or PCIe channel contention (multiple OSDs on one bus)
+    - Ceph background scrub or rebalance running at high priority
+    - A background process (backup job, defrag, snapshot consolidation) consuming
+      shared IO bandwidth during business hours
+    - A noisy-neighbour PVC on the same OSD with high IOPS demand
+  The CephPVCHighLatency alert (threshold 50ms) does NOT fire because the sick
+  latency (18-30ms) is below it — another layer of traditional monitoring blindness.
+  SickStorageBrownout fires precisely because it monitors the combination:
+  IO > 15ms AND all OSDs up AND cluster healthy — that combination is the brownout.
+
+playbook_hint: >
+  1. Open Grafana "Sick but Not Dead" dashboard — Row 5 "Storage Sick Pattern"
+  2. Confirm: storage_io_latency_seconds{pvc="pvc-db-0"} > 0.015 (rising line)
+  3. Confirm: all OSDs still 1/1 (green OSD stat panel — health is deceiving you)
+  4. Run ceph commands to find the root cause:
+       ceph iostat                  — identify high-latency OSDs
+       ceph osd perf                — look for slow_ops or high commit_latency
+       ceph osd dump | grep scrub   — check if scrub is running
+  5. Check storage node kernel logs:
+       dmesg | grep -i "io timeout\|reset\|blk_mq"
+  6. Check PVC IOPS distribution — is one PVC consuming disproportionate bandwidth?
+  7. Immediate mitigation:
+       ceph osd set noscrub         — disable scrub during business hours
+       ceph osd set nodeep-scrub    — disable deep-scrub
+  8. Longer term:
+       Isolate high-IOPS workloads to dedicated OSDs / NVMe tier
+       Add per-OSD IO latency alerting with a 10ms threshold (not just 50ms)
+       Instrument application-level IO wait time (not just cluster health)
+
+conditions:
+  - field:     io_latency
+    operator:  gte
+    threshold: 0.015
+    weight:    0.50   # primary: IO latency > 15ms (normal is 1-3ms = 5-15x)
+
+  - field:     cluster_health_score
+    operator:  eq
+    threshold: 2
+    weight:    0.30   # distinguishing: cluster REPORTS healthy (the deception)
+
+  - field:     degraded_pgs
+    operator:  eq
+    threshold: 0
+    weight:    0.20   # distinguishing: no degraded placement groups (more deception)

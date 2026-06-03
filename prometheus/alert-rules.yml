@@ -351,3 +351,169 @@ groups:
             Investigate OSD status and placement group recovery.
           dashboard_url: "http://grafana:3000/d/agentic-ai-overview"
           runbook_url: "http://xyops:5522"
+
+  # ────────────────────────────────────────────────────────────
+  # Sick but Not Dead Alerts
+  #
+  # These rules detect the grey zone between healthy and dead:
+  # the service is still responding but delivering a degraded
+  # experience. Traditional monitoring misses all of these.
+  #
+  # Detection signals:
+  #   PartialFailureDetected               — error rate in the 2-20% sick zone
+  #   LatencyPercentileDivergence          — p99/p50 ratio > 8 (bimodal distribution)
+  #   SickAPINotDead                       — p95 > 2s while error rate < 25%
+  #   SickStorageBrownout                  — IO latency elevated, all health checks green
+  #   ConnectionPoolApproachingSaturation  — downstream calls slowing without outage
+  # ────────────────────────────────────────────────────────────
+  - name: sick_but_not_dead
+    interval: 15s
+    rules:
+
+      # Error rate in the 2-20% sick zone.
+      # Below 2%  → normal noise (healthy).
+      # Above 20% → CriticalErrorRate already fires.
+      # 2-20% is the grey zone: not healthy, not dead.
+      - alert: PartialFailureDetected
+        expr: |
+          (
+            sum by (service_name) (rate(http_errors_total[2m]))
+            /
+            sum by (service_name) (rate(http_requests_total[2m]))
+          ) > 0.02
+          and
+          (
+            sum by (service_name) (rate(http_errors_total[2m]))
+            /
+            sum by (service_name) (rate(http_requests_total[2m]))
+          ) < 0.20
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          scenario: sick_but_not_dead
+        annotations:
+          summary: "Partial failure on {{ $labels.service_name }} — sick but not dead"
+          description: >-
+            {{ $labels.service_name }} error rate is {{ $value | humanizePercentage }}
+            — in the sick zone (2%–20%). The service is still responding (not dead)
+            but delivering a degraded experience. Health checks remain green.
+            Look for connection pool issues, flaky downstream dependencies, or
+            disk-level write failures causing sporadic HTTP 500 responses.
+          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          runbook_url: "http://xyops:5522"
+
+      # Bimodal latency distribution fingerprint.
+      # p99/p50 ratio > 8 means there are two populations: fast (healthy) and
+      # slow (sick). Average and p50 look OK while p99 is alarming.
+      - alert: LatencyPercentileDivergence
+        expr: |
+          (
+            histogram_quantile(
+              0.99,
+              sum by (service_name, le) (rate(http_request_duration_seconds_bucket[5m]))
+            )
+            /
+            histogram_quantile(
+              0.50,
+              sum by (service_name, le) (rate(http_request_duration_seconds_bucket[5m]))
+            )
+          ) > 8
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          scenario: sick_but_not_dead
+        annotations:
+          summary: "Bimodal latency on {{ $labels.service_name }} — p99/p50 ratio {{ $value | humanize }}x"
+          description: >-
+            {{ $labels.service_name }} p99/p50 ratio is {{ $value | humanize }}x (threshold 8x).
+            Two latency populations coexist: most requests are fast, a tail is very slow.
+            This is the statistical fingerprint of sick-but-not-dead. Check for connection
+            pool contention, GC pauses, or a slow downstream affecting a subset of requests.
+          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          runbook_url: "http://xyops:5522"
+
+      # Composite sick API signal: p95 > 2s with error rate below 25%.
+      # High tail latency + still serving most requests = sick but not dead.
+      - alert: SickAPINotDead
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service_name, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 2.0
+          and
+          (
+            sum by (service_name) (rate(http_errors_total[2m]))
+            /
+            sum by (service_name) (rate(http_requests_total[2m]))
+          ) < 0.25
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          scenario: sick_but_not_dead
+        annotations:
+          summary: "Sick API on {{ $labels.service_name }} — p95 elevated, errors < 25%"
+          description: >-
+            {{ $labels.service_name }} p95 latency is above 2 seconds while error rate < 25%.
+            Service is still responding (not dead) but tail latency indicates degraded behaviour.
+            Typical causes: saturated connection pool, slow DB queries on hot paths,
+            or a flaky downstream dependency affecting a subset of requests.
+          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          runbook_url: "http://xyops:5522"
+
+      # Storage brownout — the most deceptive sick-but-not-dead pattern.
+      # All three conditions true simultaneously:
+      #   1. IO latency > 15ms on pvc-db-0  (normal = 1ms → 15x elevated)
+      #   2. All 3 OSDs are UP              (CephOSDDown does NOT fire)
+      #   3. cluster_health_score = 2 (OK)  (CephClusterDegraded does NOT fire)
+      # Invisible to traditional monitoring. Clearly visible in IO latency time series.
+      - alert: SickStorageBrownout
+        expr: |
+          storage_io_latency_seconds{pvc="pvc-db-0"} > 0.015
+          and on()
+          count(storage_osd_up == 1) == 3
+          and on()
+          storage_cluster_health_score == 2
+        for: 2m
+        labels:
+          severity: warning
+          team: storage
+          domain: storage
+          scenario: sick_but_not_dead
+        annotations:
+          summary: "Storage brownout — IO latency {{ $value | humanizeDuration }} while cluster health=OK"
+          description: >-
+            pvc-db-0 IO latency is {{ $value | humanizeDuration }} (normal: 1ms) while ALL OSDs are
+            up and cluster_health_score=2 (OK). Traditional monitoring sees HEALTHY.
+            Users experience IO-bound slowness. This is the storage brownout: sick but not dead.
+            Investigate: ceph iostat, NVMe queue depth, background scrub schedule,
+            or a noisy neighbour saturating the shared IO channel.
+          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          runbook_url: "http://xyops:5522"
+
+      # DB pool saturation via downstream call duration p95 > 2s.
+      # Fires BEFORE error rate climbs because pool contention slows calls
+      # before it starts rejecting them. Early-warning indicator.
+      - alert: ConnectionPoolApproachingSaturation
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(downstream_call_duration_seconds_bucket[5m]))
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+          scenario: sick_but_not_dead
+        annotations:
+          summary: "Downstream call p95 {{ $value | humanizeDuration }} — DB pool contention"
+          description: >-
+            Frontend→backend downstream call p95 is {{ $value | humanizeDuration }} (threshold 2s).
+            Backend is queuing requests. Backend /health still returns 200 (not DB-backed).
+            Pattern: DB connection pool approaching exhaustion. Most calls queue and complete
+            (sick) but a growing fraction will time out (dead). Check: DB pool metrics,
+            slow query logs, backend in_flight request count.
+          dashboard_url: "http://grafana:3000/d/sick-not-dead"
+          runbook_url: "http://xyops:5522"

@@ -29,7 +29,9 @@ Telemetry emitted
 
 import asyncio
 import logging
+import math
 import os
+import random
 import time
 
 import httpx
@@ -348,5 +350,190 @@ async def backend_error():
             "status": "error",
             "message": "Proxied request to backend /error.",
             "downstream_result": result["body"],
+        },
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SICK BUT NOT DEAD — Endpoints
+#
+# These endpoints simulate the "sick but not dead" failure pattern:
+# the service keeps responding (health check = green, HTTP 200 in most cases)
+# but it is NOT delivering a healthy experience to users.
+#
+# Three distinct sub-patterns are modelled:
+#
+#  /sick               — Latency jitter (log-normal bimodal distribution).
+#                        p50 looks acceptable; p99 is alarming.
+#                        Detection: p99/p50 divergence ratio > 8.
+#
+#  /sick-partial       — 30% of requests return HTTP 500.
+#                        Error rate sits in the 2–20% "sick zone".
+#                        Health check still passes (not queried for every req).
+#                        Detection: PartialFailureDetected alert.
+#
+#  /backend-sick*      — Proxy the above patterns through to the backend,
+#                        teaching WHERE in the call chain the sickness lives.
+#                        The trace waterfall shows which span is wide/red.
+#
+#  /backend-sick-db    — Proxy to backend /sick-db (connection pool exhaustion):
+#                        85% of calls have 2–4 s delay; 10% return 503; 5% fast.
+#                        Health check on /health is NOT DB-backed → stays green.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.get("/sick", tags=["sick-but-not-dead"])
+async def sick():
+    """
+    Log-normal jitter delay — always HTTP 200.
+
+    The log-normal distribution (mu=5.7, sigma=1.1) produces:
+      p50  ≈  300 ms   (most requests feel OK)
+      p95  ≈ 2.5 s
+      p99  ≈ 6–8 s    (the sick tail that hurts users)
+
+    Prometheus captures this in http_request_duration_seconds_bucket.
+    In Grafana the latency HEATMAP shows TWO humps — the bimodal fingerprint.
+    The p99/p50 RATIO rises above 8 — the SickAPINotDead alert fires.
+    The /health endpoint still returns 200 — traditional monitoring is blind.
+    """
+    # Log-normal: median ≈ 300 ms, long tail up to 10 s
+    delay_s = min(math.exp(random.gauss(5.7, 1.1)) / 1000.0, 10.0)
+    logger.info(
+        "Handling /sick  delay=%.0fms  pattern=sick-but-not-dead",
+        delay_s * 1000,
+    )
+    await asyncio.sleep(delay_s)
+    return {
+        "service": "frontend-api",
+        "endpoint": "/sick",
+        "status": "success",        # ← always 200 — the service is NOT dead
+        "message": "Response delayed by IO/DB jitter. Sick but not dead.",
+        "delay_ms": round(delay_s * 1000, 1),
+        "pattern": "sick-but-not-dead",
+    }
+
+
+@app.get("/sick-partial", tags=["sick-but-not-dead"])
+async def sick_partial():
+    """
+    Partial failure — 70% fast HTTP 200, 30% HTTP 500.
+
+    Models: connection pool where 30% of acquire() calls time out,
+    or a flaky downstream dependency rejecting a fraction of requests.
+
+    Error rate sits in the 2–20% sick zone:
+      • NOT healthy  (healthy = 0% errors)
+      • NOT dead     (dead = 100% errors or unreachable)
+    The PartialFailureDetected alert fires; CriticalErrorRate does not.
+    Health check at /health always returns 200.
+    """
+    if random.random() < 0.30:   # 30% failure rate — the sick zone
+        logger.warning(
+            "Handling /sick-partial  outcome=failure  pattern=sick-but-not-dead  rate=30pct"
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "service": "frontend-api",
+                "endpoint": "/sick-partial",
+                "status": "error",
+                "message": "Partial failure — connection pool slot unavailable (simulated).",
+                "error_code": "SICK_PARTIAL_FAILURE",
+                "pattern": "sick-but-not-dead",
+            },
+        )
+    logger.info(
+        "Handling /sick-partial  outcome=success  pattern=sick-but-not-dead  rate=70pct"
+    )
+    return {
+        "service": "frontend-api",
+        "endpoint": "/sick-partial",
+        "status": "success",
+        "message": "Request succeeded. Note: 30 pct of requests to this endpoint fail.",
+        "pattern": "sick-but-not-dead",
+    }
+
+
+@app.get("/backend-sick", tags=["sick-but-not-dead"])
+async def backend_sick():
+    """
+    Proxy the /sick jitter pattern through to the backend service.
+
+    In the trace waterfall:
+      - Frontend SERVER span is WIDE (waiting on downstream)
+      - Backend SERVER span is WIDE (the jitter delay lives HERE)
+      - Frontend code spans are NARROW — it is just waiting
+
+    This teaches "where is the time going?" via distributed traces.
+    The downstream_call_duration_seconds metric also shows the backend wait.
+    """
+    result = await _call_backend("/sick")
+    status_code = result["status_code"]
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "service": "frontend-api",
+            "endpoint": "/backend-sick",
+            "status": "success" if status_code == 200 else "error",
+            "message": "Proxied to backend /sick — downstream jitter pattern.",
+            "downstream_result": result["body"],
+            "pattern": "sick-but-not-dead",
+        },
+    )
+
+
+@app.get("/backend-sick-partial", tags=["sick-but-not-dead"])
+async def backend_sick_partial():
+    """
+    Proxy the /sick-partial pattern through to the backend service.
+
+    In the trace waterfall:
+      - 70% traces: both spans green (backend succeeded)
+      - 30% traces: backend span RED — error propagates to frontend CLIENT span
+
+    Shows how partial failure in a downstream service creates a visible but
+    non-fatal error rate in the caller — the upstream is "sick by association".
+    """
+    result = await _call_backend("/sick-partial")
+    status_code = result["status_code"]
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "service": "frontend-api",
+            "endpoint": "/backend-sick-partial",
+            "status": "success" if status_code == 200 else "error",
+            "message": "Proxied to backend /sick-partial — downstream partial failure pattern.",
+            "downstream_result": result["body"],
+            "pattern": "sick-but-not-dead",
+        },
+    )
+
+
+@app.get("/backend-sick-db", tags=["sick-but-not-dead"])
+async def backend_sick_db():
+    """
+    Proxy the /sick-db DB pool exhaustion pattern through to the backend.
+
+    The backend /sick-db endpoint models:
+      85% — slow (2–4 s pool contention), HTTP 200
+      10% — pool exhausted, HTTP 503
+       5% — fast lucky slot, HTTP 200
+
+    Health check at /health is NOT DB-backed → always returns 200.
+    Traditional monitoring: service UP.
+    Observability: p95 latency 3 s, 10% error rate, in_flight requests rising.
+    """
+    result = await _call_backend("/sick-db")
+    status_code = result["status_code"]
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "service": "frontend-api",
+            "endpoint": "/backend-sick-db",
+            "status": "success" if status_code == 200 else "error",
+            "message": "Proxied to backend /sick-db — DB pool exhaustion pattern.",
+            "downstream_result": result["body"],
+            "pattern": "sick-but-not-dead",
         },
     )

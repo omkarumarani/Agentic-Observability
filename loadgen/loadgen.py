@@ -67,13 +67,23 @@ INTERVAL_MS: int  = int(os.getenv("LOADGEN_INTERVAL_MS", "2000"))
 # scenarios (e.g. set error weight to 50 to simulate an outage).
 # ──────────────────────────────────────────────────────────────
 _ENDPOINTS: list[tuple[str, int]] = [
-    ("/health",        10),   # liveness checks
-    ("/ok",            35),   # fast frontend success
-    ("/backend-ok",    28),   # cross-service success
-    ("/slow",           5),   # frontend latency spike
-    ("/backend-slow",   5),   # backend latency spike
-    ("/error",          7),   # frontend error
-    ("/backend-error",  10),  # cross-service error
+    ("/health",              10),   # liveness checks
+    ("/ok",                 35),   # fast frontend success
+    ("/backend-ok",         28),   # cross-service success
+    ("/slow",                5),   # frontend latency spike
+    ("/backend-slow",        5),   # backend latency spike
+    ("/error",               7),   # frontend error
+    ("/backend-error",      10),   # cross-service error
+    # ──────────────────────────────────────────────────────────
+    # Sick but not dead — always present in baseline traffic.
+    # Weights are intentionally small so these routes are visible
+    # in metrics without dominating the overall error/latency picture.
+    # This ensures the bimodal latency fingerprint is always there to
+    # observe, even without the troublemaker running.
+    # ──────────────────────────────────────────────────────────
+    ("/sick",                3),   # log-normal jitter, always 200 — bimodal latency source
+    ("/sick-partial",        3),   # 70/30 split — partial failure source
+    ("/backend-sick",        2),   # downstream jitter — trace shows backend owns it
 ]
 
 _PATHS   = [ep[0] for ep in _ENDPOINTS]

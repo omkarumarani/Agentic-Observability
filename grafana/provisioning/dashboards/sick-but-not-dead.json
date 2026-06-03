@@ -1,0 +1,781 @@
+{
+  "uid": "sick-not-dead",
+  "title": "Sick but Not Dead — Observability Scenario",
+  "description": "Learn to detect the sick-but-not-dead failure pattern: service still responds (health check = green) but delivers a degraded user experience that traditional monitoring completely misses.",
+  "tags": ["scenario", "learning", "sick-but-not-dead"],
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "style": "dark",
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "🔴  Row 1 — What Traditional Monitoring Sees (Health Checks Show GREEN)",
+      "type": "row"
+    },
+
+    {
+      "id": 2,
+      "title": "Storage Cluster Health",
+      "description": "cluster_health_score: 2 = OK. During sick_storage scenario this stays GREEN while IO is degraded. This is the deception.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "storage_cluster_health_score",
+          "legendFormat": "cluster health",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green",  "value": 2 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "ERROR" }, "1": { "text": "WARN" }, "2": { "text": "OK" } } }
+          ]
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 3,
+      "title": "Ceph OSDs Online",
+      "description": "All 3 OSDs stay UP during sick_storage scenario. Health check passes. This is the deception.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(storage_osd_up)",
+          "legendFormat": "OSDs online",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "yellow","value": 1 },
+              { "color": "green", "value": 3 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 4,
+      "title": "Backend API — Request Rate (req/s)",
+      "description": "Backend is still receiving and responding to requests during all sick scenarios. Service is NOT dead.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service_name=\"backend-api\"}[1m]))",
+          "legendFormat": "backend req/s",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 0.001 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 5,
+      "title": "The Deception — Why Traditional Monitoring is Blind",
+      "type": "text",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Traditional Monitoring Says: ALL GREEN\n\n| Signal | Value | Alert? |\n|--------|-------|--------|\n| Cluster Health | 2 = OK | ❌ No |\n| OSDs Online | 3/3 | ❌ No |\n| Backend Request Rate | > 0 | ❌ No |\n| Health Check HTTP | 200 | ❌ No |\n\n**Health != Performance.**  \nNone of these signals detect sick-but-not-dead.  \nScroll down to see what users actually experience."
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 6,
+      "title": "📊  Row 2 — What Users Actually Experience (The Truth)",
+      "type": "row"
+    },
+
+    {
+      "id": 7,
+      "title": "Live Error Rate",
+      "description": "The sick zone: 2–20%. Below 2% = healthy noise. Above 20% = CriticalErrorRate fires. Between 2-20% is the grey zone observability catches but traditional monitoring misses.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_errors_total[2m])) / sum(rate(http_requests_total[2m]))",
+          "legendFormat": "error rate",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.02 },
+              { "color": "red",    "value": 0.20 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 8,
+      "title": "P99 Latency (All Routes)",
+      "description": "Tail latency is the sick signal. During sick scenarios p99 can reach 6-8 seconds while p50 stays under 500ms.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 2 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 9,
+      "title": "P99 / P50 Divergence Ratio",
+      "description": "The bimodal fingerprint. A healthy service has a ratio near 3-4x. Sick-but-not-dead pushes this above 8x because there are two populations: fast (majority) and slow (tail).",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) / histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99/p50 ratio",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 4 },
+              { "color": "red",    "value": 8 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 10,
+      "title": "P50 Latency (Median)",
+      "description": "The misleading signal. P50 stays low during sick scenarios. This is why averages and medians hide the problem. Users in the slow population suffer invisibly.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50 (median)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red",    "value": 1.5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 11,
+      "title": "Latency Percentile Fan — P10, P50, P95, P99 Over Time",
+      "description": "When sick: P10 and P50 look fine. P95 and P99 diverge dramatically. This 'percentile fan' opening wide is the sick-but-not-dead signature in time series. A healthy service has all percentiles close together.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.10, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P10 — fastest 10%",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P50 — median (looks OK!)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P95 — 5% suffer this",
+          "refId": "C"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P99 — the sick tail",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 2 }
+            ]
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "P10 — fastest 10%" },  "properties": [{ "id": "color", "value": { "fixedColor": "#73BF69", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P50 — median (looks OK!)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P95 — 5% suffer this" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "P99 — the sick tail" },  "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 12,
+      "title": "🔬  Row 3 — The Bimodal Fingerprint (How to Detect Sick)",
+      "type": "row"
+    },
+
+    {
+      "id": 13,
+      "title": "P99/P50 Ratio Over Time — Bimodal Fingerprint (>8 = Sick)",
+      "description": "When this ratio exceeds 8 it means two latency populations exist simultaneously. The majority of requests are fast (healthy population). A minority is very slow (sick population). Average and median hide the slow minority. This ratio exposes them.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) / histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99/p50 ratio",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 4 },
+              { "color": "red",    "value": 8 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "id": 14,
+      "title": "Error Rate Over Time — The Sick Zone (2%–20%)",
+      "description": "Below 2%: healthy baseline noise. Above 20%: CriticalErrorRate fires (everyone knows). Between 2-20%: the sick zone — service degraded but no critical alert. This is what sick-but-not-dead looks like in error rate.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (rate(http_errors_total[2m])) / sum by (service_name) (rate(http_requests_total[2m]))",
+          "legendFormat": "{{ service_name }} error rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.02 },
+              { "color": "red",    "value": 0.20 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+      "id": 15,
+      "title": "🌐  Row 4 — API Sick Pattern (Per-Route Breakdown)",
+      "type": "row"
+    },
+
+    {
+      "id": 16,
+      "title": "Per-Route P99 Latency — /sick vs /ok vs /slow",
+      "description": "Compare routes directly. /sick shows the log-normal jitter (high p99, low p50). /ok is always fast. /slow is uniformly slow. The contrast teaches why route-level latency is essential — service-wide p99 hides which routes are sick.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (http_route, le) (rate(http_request_duration_seconds_bucket{http_route=~\"/sick|/sick-partial|/ok|/slow\"}[5m])))",
+          "legendFormat": "{{ http_route }} — p99",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 5 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red",    "value": 2 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "id": 17,
+      "title": "Per-Route Error Rate — Partial Failure Fingerprint",
+      "description": "The /sick route has 0% errors (always 200, just slow). The /sick-partial route has ~30% errors (the partial failure pattern). /ok has ~0%. This per-route view is invisible in service-level aggregates — you must break down by route.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (http_route) (rate(http_errors_total{http_route=~\"/sick|/sick-partial|/ok|/error\"}[2m])) / sum by (http_route) (rate(http_requests_total{http_route=~\"/sick|/sick-partial|/ok|/error\"}[2m]))",
+          "legendFormat": "{{ http_route }} error rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.02 },
+              { "color": "red",    "value": 0.20 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 18,
+      "title": "💾  Row 5 — Storage Sick Pattern (The Deception)",
+      "type": "row"
+    },
+
+    {
+      "id": 19,
+      "title": "PVC IO Latency — Elevated During Storage Brownout",
+      "description": "Activate sick_storage troublemaker scenario and watch these lines rise. Simultaneously the OSD and cluster health panels on the right stay GREEN. The gap between IO latency (sick) and health metrics (green) is the storage brownout signature.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "storage_io_latency_seconds{pvc=\"pvc-app-0\"} * 1000",
+          "legendFormat": "pvc-app-0 (ms)",
+          "refId": "A"
+        },
+        {
+          "expr": "storage_io_latency_seconds{pvc=\"pvc-app-1\"} * 1000",
+          "legendFormat": "pvc-app-1 (ms)",
+          "refId": "B"
+        },
+        {
+          "expr": "storage_io_latency_seconds{pvc=\"pvc-db-0\"} * 1000",
+          "legendFormat": "pvc-db-0 (ms) ← SickStorageBrownout watches this",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red",    "value": 15 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "pvc-db-0 (ms) ← SickStorageBrownout watches this" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "id": 20,
+      "title": "Ceph OSDs Online (Stays 3 During sick_storage)",
+      "description": "This stays GREEN during the brownout. Health check is binary — it checks if OSD processes are running, not if they are serving IO efficiently.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(storage_osd_up)",
+          "legendFormat": "OSDs online",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "yellow","value": 1 },
+              { "color": "green", "value": 3 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 21,
+      "title": "Cluster Health Score (Stays 2=OK During sick_storage)",
+      "description": "cluster_health_score=2 means OK. This stays green during the brownout while IO latency is 8-18x elevated. Health != Performance.",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 37 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "storage_cluster_health_score",
+          "legendFormat": "cluster health",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green",  "value": 2 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "ERROR" }, "1": { "text": "WARN" }, "2": { "text": "OK" } } }
+          ]
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 22,
+      "title": "The IO Brownout Deception — Why Health Checks Lie",
+      "type": "text",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 41 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Why Health Checks Miss the Brownout\n\n**Health checks ask:** \"Is the OSD process running?\"\n**Health checks do NOT ask:** \"Is the OSD serving IO within latency SLA?\"\n\nDuring `sick_storage`:\n- `pvc-db-0` IO latency: **18ms** (normal: 1ms = **18x elevated**)\n- `SickStorageBrownout` fires at **>15ms** combined with all OSDs up\n- `PVCHighLatency` threshold is **50ms** → **does NOT fire**\n\nThe gap between 15ms (sick) and 50ms (traditional alert) is where brownouts live undetected for hours."
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "id": 23,
+      "title": "🔌  Row 6 — DB / Network Sick Pattern (Pool Exhaustion)",
+      "type": "row"
+    },
+
+    {
+      "id": 24,
+      "title": "Downstream Call Duration P95 — Frontend → Backend",
+      "description": "Tracks how long the frontend waits for the backend to respond. During sick_db: p95 rises above 2s as requests queue for a DB pool slot. Backend /health returns 200 immediately (not pool-backed). ConnectionPoolApproachingSaturation alert fires at >2s.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(downstream_call_duration_seconds_bucket[5m])))",
+          "legendFormat": "P50 downstream",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(downstream_call_duration_seconds_bucket[5m])))",
+          "legendFormat": "P95 downstream ← alert threshold 2s",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(downstream_call_duration_seconds_bucket[5m])))",
+          "legendFormat": "P99 downstream",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red",    "value": 2 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "P95 downstream ← alert threshold 2s" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "id": 25,
+      "title": "Requests In Flight — The Queuing Effect",
+      "description": "As pool contention grows, requests queue. In-flight count rises above normal. A rising in-flight count with rising p95 latency and LOW CPU usage is the pool saturation signature. CPU saturation looks different: in-flight stays constant, latency rises, CPU pegs at 100%.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 46 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (service_name) (http_requests_in_flight)",
+          "legendFormat": "{{ service_name }} in-flight",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red",    "value": 25 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 54 },
+      "id": 26,
+      "title": "📖  Row 7 — Learning Summary: Why Traditional Monitoring Fails",
+      "type": "row"
+    },
+
+    {
+      "id": 27,
+      "title": "Sick but Not Dead — Learning Reference",
+      "type": "text",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 55 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Sick but Not Dead — What Each Signal Tells You\n\n| Alert / Signal | What It Detects | Traditional Monitoring | Observability Signal |\n|----------------|-----------------|------------------------|----------------------|\n| `PartialFailureDetected` | Error rate 2–20% sick zone | ❌ Below critical threshold → no alert | ✅ Fires. Service degraded but not dead. |\n| `LatencyPercentileDivergence` | p99/p50 ratio > 8 (bimodal) | ❌ Average latency looks OK | ✅ Fires. Two user populations: fast majority + slow tail. |\n| `SickAPINotDead` | p95 > 2s while errors < 25% | ❌ Health check still 200 | ✅ Fires. Tail latency + sub-critical errors = sick. |\n| `SickStorageBrownout` | IO latency > 15ms with all OSDs up + cluster=OK | ❌ All health checks green, PVCHighLatency (50ms) silent | ✅ Fires. Monitors combination: IO sick + health deceiving. |\n| `ConnectionPoolApproachingSaturation` | Downstream call p95 > 2s | ❌ Backend /health returns 200 immediately | ✅ Fires. Pool contention visible in downstream duration. |\n\n## How to Run the Scenarios\n\n```bash\n# Trigger API sick pattern manually\ncurl http://localhost:8080/sick          # log-normal jitter, always 200\ncurl http://localhost:8080/sick-partial  # 30% HTTP 500\n\n# Trigger storage brownout manually\ncurl -X POST http://localhost:9200/scenario/sick_storage\n# Watch Grafana Row 5 — IO latency rises, OSDs stay green\n# Revert:\ncurl -X POST http://localhost:9200/scenario/healthy\n\n# Let troublemaker run automatically\n# sick_api, sick_db, sick_storage rotate in with weights 2, 2, 1\n```\n\n## Key Learning Points\n\n1. **Health != Performance.** A service can be running and accepting requests while delivering severely degraded performance.\n2. **Averages lie.** P50 (median) hides the slow population. Use P95 and P99. Monitor the **ratio** P99/P50 — a wide ratio means bimodal distribution.\n3. **The sick zone (2-20%)** is the detection gap in traditional alert thresholds. Set a `for: 2m` warning at 2% to catch it.\n4. **Health checks are not backed by the resource they protect.** `/health` returning 200 proves the process is alive, not that DB connections, IO queues, or downstream services are healthy.\n5. **Combine signals for compound detection.** `SickStorageBrownout` only fires when IO is elevated AND health checks are green — the AND is what makes it precise.\n\n## Applying This to Red Hat OpenShift\n\nSame patterns, different instrumentation:\n- OCP routes → track p99 per `Route` object not just service\n- `etcd` request duration → watch for bimodal distribution (leader election delays)\n- Storage: ODF/Ceph health vs `ceph osd perf` IO latency\n- Network: pod-to-pod latency via Envoy/Istio proxy metrics, not just Alive/Not-Alive\n- Node: CPU throttling (`container_cpu_cfs_throttled_ratio`) vs CPU usage — a container can be healthy but CPU-throttled"
+      }
+    }
+
+  ]
+}

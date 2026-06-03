@@ -1,0 +1,82 @@
+scenario_id:   sick_db_saturation
+display_name:  "Sick but Not Dead — DB Connection Pool Saturation"
+domain:        compute
+version:       "1.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# What this scenario teaches
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The DB connection pool is approaching or at saturation. The service still
+# serves requests (not dead) but most queue for a pool slot:
+#
+#   - P95 frontend→backend downstream_call_duration_seconds > 2s
+#   - http_requests_in_flight rises (requests queuing, not completing fast)
+#   - ~10% of backend requests return HTTP 503 (pool exhausted path)
+#   - Backend /health returns 200 immediately (not pool-backed — the deception)
+#
+# Traditional monitoring: backend health check passes, no "service down" alert.
+# Observability: ConnectionPoolApproachingSaturation + SickAPINotDead fire.
+#
+# Triggered by: /backend-sick-db endpoint + sick_db troublemaker scenario.
+# ─────────────────────────────────────────────────────────────────────────────
+
+alert_name_patterns:
+  - "ConnectionPoolApproachingSaturation"
+  - "SickAPINotDead"
+  - "HighP99Latency"
+  - "PartialFailureDetected"
+
+alert_match_weight: 0.30
+confidence_threshold: 0.30
+
+action:       investigate_db_connections
+autonomy:     approval_gated
+irreversible: false
+
+rca: >
+  DB connection pool is saturated or approaching saturation. Requests queue
+  while waiting for a pool slot, causing 2-4 second delays for most users.
+  A small fraction of requests (10%) hit the exhausted path and receive HTTP 503.
+  The service is "sick but not dead": still responding, but slowly and with errors.
+  The critical deception: the /health endpoint is NOT backed by the DB connection
+  pool — it returns 200 immediately while real user requests queue for seconds.
+  Traditional monitoring (health check polling) is completely blind to this.
+  The tell: downstream_call_duration_seconds p95 > 2s identifies the bottleneck
+  lives in the backend, not the network or the frontend.
+
+playbook_hint: >
+  1. Open Grafana "Sick but Not Dead" dashboard — Row 6 "DB / Network Sick Pattern"
+  2. Check downstream_call_duration_seconds p95 — confirm > 2s
+  3. Check http_requests_in_flight — confirm rising (requests queuing)
+  4. Open Tempo — filter by /backend-sick-db route, sort by duration
+     Backend SERVER span will be 2-4s wide (pool wait visible as span delay)
+  5. Check backend /health endpoint — it returns 200 immediately
+     This confirms health check is not backed by the pool (the deception)
+  6. Query:
+       rate(http_errors_total{http_route="/sick-db"}[2m])
+       / rate(http_requests_total{http_route="/sick-db"}[2m])
+     Expect ~10% error rate (pool_exhausted path)
+  7. Application fix: increase pool max_size, add acquire_timeout, add circuit breaker
+  8. Monitoring fix: instrument the pool itself (wait_time, size, in_use, overflow_count)
+
+conditions:
+  - field:     latency_p95
+    operator:  gte
+    threshold: 2.0
+    weight:    0.45   # primary: p95 above 2s = pool contention
+
+  - field:     error_rate
+    operator:  lt
+    threshold: 0.15
+    weight:    0.20   # distinguishing: service not dead (<15% errors)
+
+  - field:     cpu_usage
+    operator:  lt
+    threshold: 0.70
+    weight:    0.20   # not CPU-bound: rules out cpu_saturation scenario
+
+  - field:     latency_p99
+    operator:  gte
+    threshold: 3.0
+    weight:    0.15   # p99 very high (pool timeout path completing slowly)

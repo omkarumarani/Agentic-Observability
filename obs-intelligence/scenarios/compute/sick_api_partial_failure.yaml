@@ -1,0 +1,88 @@
+scenario_id:   sick_api_partial_failure
+display_name:  "Sick but Not Dead — API Partial Failure"
+domain:        compute
+version:       "1.0"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# What this scenario teaches
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The service is still responding (health check = 200, not unreachable)
+# but delivering a degraded user experience:
+#
+#   - Error rate is between 2% and 20% (the "sick zone")
+#   - P99 latency is elevated while P50 is still acceptable
+#   - The gap between p99 and p50 is large (bimodal distribution)
+#
+# Traditional monitoring: all health checks green, no dead-service alert.
+# Observability: PartialFailureDetected + LatencyPercentileDivergence fire.
+#
+# Triggered by: /sick and /sick-partial endpoints + sick_api troublemaker scenario.
+# ─────────────────────────────────────────────────────────────────────────────
+
+alert_name_patterns:
+  - "PartialFailureDetected"
+  - "SickAPINotDead"
+  - "LatencyPercentileDivergence"
+  - "HighErrorRate"
+  - "HighP99Latency"
+
+alert_match_weight: 0.35
+confidence_threshold: 0.30
+
+action:       investigate_partial_degradation
+autonomy:     approval_gated
+irreversible: false
+
+rca: >
+  The service is responding but delivering a degraded experience — classic
+  "sick but not dead". Error rate sits in the 2-20% sick zone: too high to be
+  normal noise, too low to fire a critical alert. P99 latency is elevated while
+  P50 remains acceptable, creating a bimodal distribution (p99/p50 ratio > 8).
+  Most probable causes: a connection pool where a fraction of acquire() calls
+  time out (producing the partial failures), a flaky downstream dependency
+  rejecting a subset of requests, or a slow code path triggered only under
+  certain conditions (e.g. cache miss hitting a slow DB query).
+  Health check still returns 200 because it is not backed by the affected pool.
+
+playbook_hint: >
+  1. Open Grafana "Sick but Not Dead" dashboard — Row 2 shows the truth users see
+  2. Check PartialFailureDetected alert: which service_name is in the sick zone?
+  3. Query Prometheus:
+       rate(http_errors_total{service_name="<svc>"}[2m])
+       / rate(http_requests_total{service_name="<svc>"}[2m])
+     Confirm 2-20% range.
+  4. Check p99/p50 ratio:
+       histogram_quantile(0.99,...) / histogram_quantile(0.50,...)
+     Ratio > 8 confirms bimodal distribution.
+  5. Open Tempo — filter by service, sort by duration DESC
+     Two populations: fast traces (< 100ms) and slow traces (> 2s)
+  6. In slow traces, identify the wide span — that is where the contention lives
+  7. Check connection pool metrics and downstream dependency error rates
+  8. Correlate Loki logs: filter by service, look for "SICK_PARTIAL_FAILURE" errors
+
+conditions:
+  - field:     error_rate
+    operator:  gte
+    threshold: 0.02
+    weight:    0.30   # primary: error rate above healthy baseline
+
+  - field:     error_rate
+    operator:  lt
+    threshold: 0.20
+    weight:    0.20   # distinguishing: not critical (dead would be 50%+)
+
+  - field:     latency_p99
+    operator:  gte
+    threshold: 2.0
+    weight:    0.25   # p99 elevated (sick tail)
+
+  - field:     latency_p50
+    operator:  lt
+    threshold: 1.0
+    weight:    0.15   # p50 still OK — confirms bimodal, not uniform slowness
+
+  - field:     recent_warning_count
+    operator:  gte
+    threshold: 1
+    weight:    0.10   # warning logs for partial failures

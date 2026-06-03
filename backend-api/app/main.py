@@ -28,7 +28,9 @@ Telemetry emitted
 
 import asyncio
 import logging
+import math
 import os
+import random
 import time
 
 from fastapi import FastAPI, Request
@@ -328,3 +330,143 @@ async def data():
         "out_of_stock_count": len(out_of_stock),
         "items": items,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SICK BUT NOT DEAD — Backend Endpoints
+#
+# Mirror the frontend sick patterns here so the behaviour originates in
+# the backend layer. When the frontend proxies to these endpoints via
+# /backend-sick*, the trace waterfall shows the wide span is HERE, in the
+# backend — teaching "which service owns the problem".
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@app.get("/sick", tags=["sick-but-not-dead"])
+async def sick():
+    """
+    Log-normal jitter delay originating in the backend — always HTTP 200.
+
+    When called via frontend /backend-sick, this span is the wide one in
+    the trace waterfall. The frontend span is almost entirely a straight
+    wait. This is how you identify "the backend owns the latency".
+    """
+    # Log-normal: median ≈ 300 ms, long tail up to 10 s
+    delay_s = min(math.exp(random.gauss(5.7, 1.1)) / 1000.0, 10.0)
+    logger.info(
+        "Handling /sick  delay=%.0fms  pattern=sick-but-not-dead",
+        delay_s * 1000,
+    )
+    await asyncio.sleep(delay_s)
+    return {
+        "service": "backend-api",
+        "endpoint": "/sick",
+        "status": "success",
+        "message": "Backend response delayed by IO/DB jitter. Sick but not dead.",
+        "delay_ms": round(delay_s * 1000, 1),
+        "pattern": "sick-but-not-dead",
+    }
+
+
+@app.get("/sick-partial", tags=["sick-but-not-dead"])
+async def sick_partial():
+    """
+    Partial failure originating in the backend — 70% fast HTTP 200, 30% HTTP 500.
+
+    When called via frontend /backend-sick-partial, 30% of frontend traces
+    will show a RED backend span propagating up to the frontend CLIENT span.
+    This is the "sick by association" pattern in distributed tracing.
+    """
+    if random.random() < 0.30:
+        logger.warning(
+            "Handling /sick-partial  outcome=failure  pattern=sick-but-not-dead  rate=30pct"
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "service": "backend-api",
+                "endpoint": "/sick-partial",
+                "status": "error",
+                "message": "Backend partial failure — connection pool slot unavailable.",
+                "error_code": "SICK_PARTIAL_FAILURE",
+                "pattern": "sick-but-not-dead",
+            },
+        )
+    logger.info(
+        "Handling /sick-partial  outcome=success  pattern=sick-but-not-dead  rate=70pct"
+    )
+    return {
+        "service": "backend-api",
+        "endpoint": "/sick-partial",
+        "status": "success",
+        "message": "Request succeeded. Note: 30 pct of requests to this endpoint fail.",
+        "pattern": "sick-but-not-dead",
+    }
+
+
+@app.get("/sick-db", tags=["sick-but-not-dead"])
+async def sick_db():
+    """
+    DB connection pool exhaustion — the hardest sick-but-not-dead to diagnose.
+
+    Probability model:
+      85% — slow path: 2–4 s pool contention wait, then HTTP 200
+      10% — timeout path: pool exhausted, HTTP 503 immediately
+       5% — fast lucky path: pool slot available immediately, HTTP 200
+
+    KEY INSIGHT: /health is NOT backed by the DB connection pool.
+    Traditional monitoring sees: service UP, health check GREEN.
+    Observability detects: p95 latency 3 s, 10% error rate, in_flight rising.
+
+    This teaches why health checks are necessary but NOT sufficient.
+    A service can pass /health while its primary DB pool is saturated.
+    """
+    roll = random.random()
+
+    if roll < 0.05:
+        # Lucky path — pool slot immediately available (5% of requests)
+        logger.info(
+            "Handling /sick-db  path=lucky  pool_slot=available  pattern=sick-but-not-dead"
+        )
+        return {
+            "service": "backend-api",
+            "endpoint": "/sick-db",
+            "status": "success",
+            "message": "DB query completed immediately (lucky pool slot).",
+            "delay_ms": 0,
+            "pattern": "sick-but-not-dead",
+        }
+
+    elif roll < 0.15:
+        # Timeout path — pool exhausted (10% of requests)
+        logger.warning(
+            "Handling /sick-db  path=pool_exhausted  error=DB_POOL_EXHAUSTED  pattern=sick-but-not-dead"
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "service": "backend-api",
+                "endpoint": "/sick-db",
+                "status": "error",
+                "message": "DB connection pool exhausted — request timed out waiting for slot.",
+                "error_code": "DB_POOL_EXHAUSTED",
+                "pattern": "sick-but-not-dead",
+            },
+        )
+
+    else:
+        # Slow path — queuing for a pool slot (85% of requests)
+        delay_s = random.uniform(2.0, 4.0)
+        logger.info(
+            "Handling /sick-db  path=pool_contention  queue_wait=%.0fms  pattern=sick-but-not-dead",
+            delay_s * 1000,
+        )
+        await asyncio.sleep(delay_s)
+        return {
+            "service": "backend-api",
+            "endpoint": "/sick-db",
+            "status": "success",
+            "message": f"DB query completed after {delay_s * 1000:.0f}ms pool contention wait.",
+            "delay_ms": round(delay_s * 1000, 1),
+            "pattern": "sick-but-not-dead",
+        }

@@ -74,6 +74,7 @@ def _bool_env(name: str, default: str = "true") -> bool:
 
 
 BASE_URL         = os.getenv("FRONTEND_BASE_URL",  "http://frontend-api:8080").rstrip("/")
+STORAGE_SIM_URL  = os.getenv("STORAGE_SIMULATOR_URL", "http://storage-simulator:9200").rstrip("/")
 MIN_SLEEP        = float(os.getenv("MIN_SLEEP_SECONDS",  "5"))
 MAX_SLEEP        = float(os.getenv("MAX_SLEEP_SECONDS", "25"))
 BURST_MIN        = int(os.getenv("BURST_MIN",          "20"))
@@ -95,6 +96,7 @@ ENDPOINTS_NORMAL = ["/ok", "/backend-ok"]
 ENDPOINTS_SLOW   = ["/slow", "/backend-slow"]
 ENDPOINTS_ERROR  = ["/error", "/backend-error"]
 ENDPOINTS_ALL    = ENDPOINTS_NORMAL + ENDPOINTS_SLOW + ENDPOINTS_ERROR
+ENDPOINTS_SICK   = ["/sick", "/sick-partial", "/backend-sick", "/backend-sick-partial"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -654,6 +656,200 @@ def scenario_slow_burn() -> dict:
     }
 
 
+def scenario_sick_api() -> dict:
+    """
+    "Sick but Not Dead" — API jitter and partial failure mix.
+
+    What it generates
+    -----------------
+    Prometheus  p99/p50 ratio diverges above 8x — the bimodal latency fingerprint.
+                Error rate sits in the 2–20% sick zone (not healthy, not dead).
+                Request RATE stays normal — the service is still responding.
+                Alerts that fire: PartialFailureDetected, LatencyPercentileDivergence,
+                SickAPINotDead.
+                Alerts that do NOT fire: CriticalErrorRate, HighErrorRate (above 20%).
+    Loki        Mix of INFO (fast /sick-partial success), WARNING (/sick-partial
+                failure lines at ~30%), and slow INFO (/sick with high delay_ms).
+                This interleaving at the SAME timestamp is the sick log signature.
+    Tempo       Two trace populations visible simultaneously:
+                  - Narrow fast spans (70% of /sick-partial calls — fast 200)
+                  - Wide slow spans (/sick calls with log-normal jitter delay)
+                The bimodal span width distribution is the sick-but-not-dead
+                fingerprint in the trace explorer timeline.
+
+    Learning value
+    --------------
+    Health check returns 200. Error rate is below CriticalErrorRate threshold.
+    P50 looks acceptable. Only percentile divergence (p99/p50 ratio > 8) and
+    the latency heatmap reveal the problem. This teaches why you need p99
+    monitoring, not just averages.
+    """
+    n = STEADY_REQUESTS
+    all_sick = ENDPOINTS_SICK
+    log.info(
+        "[sick_api]   Sending %d sick-jitter + %d partial-failure requests",
+        n, n,
+    )
+    r_jitter  = _fire_requests(["/sick", "/backend-sick"],           n, delay_between=0.3)
+    r_partial = _fire_requests(["/sick-partial", "/backend-sick-partial"], n, delay_between=0.1)
+
+    total  = r_jitter["total"] + r_partial["total"]
+    ok     = r_jitter["ok"]    + r_partial["ok"]
+    err    = r_jitter["err"]   + r_partial["err"]
+    avg_ms = (
+        r_jitter["avg_ms"] * r_jitter["total"]
+        + r_partial["avg_ms"] * r_partial["total"]
+    ) / total
+    max_ms = max(r_jitter["max_ms"], r_partial["max_ms"])
+
+    log.info(
+        "[sick_api]   Done  total=%d  ok=%d  err=%d  avg=%.0fms  max=%.0fms",
+        total, ok, err, avg_ms, max_ms,
+    )
+    return {
+        "endpoints":     ", ".join(all_sick),
+        "request_count": total,
+        "burst_size":    0,
+        "ok":            ok,
+        "err":           err,
+        "avg_ms":        avg_ms,
+        "max_ms":        max_ms,
+        "notes":         "sick-but-not-dead: bimodal latency + 2-20% error rate in sick zone",
+    }
+
+
+def scenario_sick_db() -> dict:
+    """
+    DB connection pool exhaustion — the hardest sick-but-not-dead to diagnose.
+
+    What it generates
+    -----------------
+    Prometheus  downstream_call_duration_seconds p95 rises above 2s → triggers
+                ConnectionPoolApproachingSaturation alert.
+                http_requests_in_flight rises (requests queuing, not completing fast).
+                Backend /health still returns 200 — traditional monitoring: service UP.
+    Loki        Backend logs show: "path=pool_contention  queue_wait=3000ms" lines
+                (85% of requests) and "path=pool_exhausted  error=DB_POOL_EXHAUSTED"
+                lines (10% of requests). All carry the same trace_id chain.
+    Tempo       Wide backend SERVER spans (2-4s pool wait) with a small width frontend
+                CLIENT span wrapping them. The backend owns the latency completely.
+                10% of traces show a red backend span (503 pool exhausted path).
+
+    Learning value
+    --------------
+    The most deceptive sick-but-not-dead variant. The frontend /health and the
+    backend /health both return 200 immediately (neither is DB-backed). Yet
+    real user requests are queuing 2-4 seconds before completing. Only the
+    downstream_call_duration_seconds p95 metric reveals the problem.
+    """
+    n = STEADY_REQUESTS
+    log.info("[sick_db]    Sending %d requests to DB pool exhaustion pattern", n)
+    # Mix: /backend-sick-db (pool exhaustion model) + /backend-sick (jitter)
+    r = _fire_requests(["/backend-sick-db", "/backend-sick"], n, delay_between=0.5)
+    log.info(
+        "[sick_db]    Done  total=%d  ok=%d  err=%d  avg=%.0fms  max=%.0fms",
+        r["total"], r["ok"], r["err"], r["avg_ms"], r["max_ms"],
+    )
+    return {
+        "endpoints":     "/backend-sick-db, /backend-sick",
+        "request_count": r["total"],
+        "burst_size":    0,
+        "ok":            r["ok"],
+        "err":           r["err"],
+        "avg_ms":        r["avg_ms"],
+        "max_ms":        r["max_ms"],
+        "notes":         "sick-but-not-dead: DB pool contention (slow queuing + 10% 503s)",
+    }
+
+
+def scenario_sick_storage() -> dict:
+    """
+    Storage brownout — the most deceptive sick-but-not-dead pattern.
+
+    Activates the sick_storage scenario on the storage-simulator:
+      OSDs: all 3 UP  →  CephOSDDown does NOT fire
+      cluster_health_score: 2 (OK)  →  CephClusterDegraded does NOT fire
+      IO latency: 8–18x normal  →  SickStorageBrownout DOES fire
+      Pool fill: 65%  →  CephPoolNearFull does NOT fire
+
+    Then sends normal frontend traffic to prove the API layer is still
+    healthy — reinforcing the "not dead" part of "sick but not dead".
+    Auto-reverts to healthy after 90 seconds so the sick→recovery arc
+    is visible as a dip and recovery on the Grafana IO latency panel.
+
+    What it generates
+    -----------------
+    Prometheus  storage_io_latency_seconds{pvc="pvc-db-0"} rises to 0.018 (18x)
+                storage_osd_up{osd_id="osd.0/1/2"} stays at 1 (all green)
+                storage_cluster_health_score stays at 2 (OK)
+                SickStorageBrownout alert fires (IO > 15ms + all OSDs up + health=2)
+    Loki        Normal frontend API logs continue — the web tier is unaffected
+    Grafana     Row 5 "Storage Sick Pattern" panel: IO latency rising, OSD count flat
+
+    Learning value
+    --------------
+    The storage cluster reports healthy. The Grafana storage health dashboard shows
+    green everywhere. But the IO latency time series panel tells the truth.
+    Health != Performance. This is the core lesson of storage brownouts.
+    """
+    log.info(
+        "[sick_storage]  Activating sick_storage on storage-simulator "
+        "(OSDs stay green, IO latency rises 10-18x)..."
+    )
+    try:
+        resp = requests.post(f"{STORAGE_SIM_URL}/scenario/sick_storage", timeout=10)
+        if resp.status_code == 200:
+            log.info("[sick_storage]  Scenario activated: sick_storage")
+        else:
+            log.warning(
+                "[sick_storage]  Storage simulator returned HTTP %d — continuing",
+                resp.status_code,
+            )
+    except requests.exceptions.RequestException as exc:
+        log.warning(
+            "[sick_storage]  Could not reach storage-simulator at %s: %s — continuing",
+            STORAGE_SIM_URL, exc,
+        )
+
+    # Send normal frontend traffic — proves API is still responding (not dead)
+    log.info(
+        "[sick_storage]  Sending %d normal API requests to demonstrate "
+        "web tier is healthy while storage is sick...",
+        STEADY_REQUESTS,
+    )
+    r = _fire_requests(ENDPOINTS_NORMAL, STEADY_REQUESTS, delay_between=0.5)
+    log.info(
+        "[sick_storage]  API ok=%d err=%d avg=%.0fms — web tier healthy, storage sick",
+        r["ok"], r["err"], r["avg_ms"],
+    )
+
+    # Hold for 90 seconds so the brownout is visible in Grafana time series
+    log.info(
+        "[sick_storage]  Holding sick_storage for 90s "
+        "— watch Grafana 'Storage Sick Pattern' row for IO latency rise..."
+    )
+    time.sleep(90)
+
+    # Auto-revert so the sick → recovery transition is visible
+    log.info("[sick_storage]  Reverting to healthy scenario...")
+    try:
+        requests.post(f"{STORAGE_SIM_URL}/scenario/healthy", timeout=10)
+        log.info("[sick_storage]  Storage reverted to healthy")
+    except requests.exceptions.RequestException as exc:
+        log.warning("[sick_storage]  Could not revert: %s", exc)
+
+    return {
+        "endpoints":     ", ".join(ENDPOINTS_NORMAL),
+        "request_count": r["total"],
+        "burst_size":    0,
+        "ok":            r["ok"],
+        "err":           r["err"],
+        "avg_ms":        r["avg_ms"],
+        "max_ms":        r["max_ms"],
+        "notes":         "sick-but-not-dead: storage brownout 90s (IO 10-18x, OSDs green, health=OK)",
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Scenario registry
 # ─────────────────────────────────────────────────────────────────────────────
@@ -684,6 +880,10 @@ def _build_registry() -> list[ScenarioEntry]:
         ScenarioEntry("slow_backend",    scenario_slow_backend,    enabled=ENABLE_SLOW,   weight=2),
         ScenarioEntry("mixed_chaos",     scenario_mixed_chaos,     enabled=True,          weight=3),
         ScenarioEntry("slow_burn",       scenario_slow_burn,       enabled=ENABLE_SLOW,   weight=1),
+        # Sick but not dead scenarios
+        ScenarioEntry("sick_api",        scenario_sick_api,        enabled=True,          weight=2),
+        ScenarioEntry("sick_db",         scenario_sick_db,         enabled=True,          weight=2),
+        ScenarioEntry("sick_storage",    scenario_sick_storage,    enabled=True,          weight=1),
     ]
 
 
